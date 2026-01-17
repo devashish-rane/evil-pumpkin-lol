@@ -9,9 +9,14 @@ interface TopicCardProps {
 export default function TopicCard({ topic }: TopicCardProps) {
   const { prefs, toggleSelectedTopic } = useData();
   const isSelected = prefs.selectedTopicIds.includes(topic.id);
+  const questionCount = topic.concepts.reduce(
+    (sum, concept) => sum + concept.questions.length,
+    0
+  );
+  const questionLabel = `${questionCount} question${questionCount === 1 ? '' : 's'}`;
 
   return (
-    <div className="rounded-3xl border border-ink-100 bg-white p-5 shadow-soft transition hover:-translate-y-1">
+    <div className="rounded-3xl border border-ink-200 bg-white/90 p-5 shadow-soft transition hover:-translate-y-1">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-ink-900">{topic.title}</h3>
         <span className="rounded-full bg-ink-100 px-3 py-1 text-xs font-semibold text-ink-600">
@@ -20,13 +25,20 @@ export default function TopicCard({ topic }: TopicCardProps) {
       </div>
       <p className="mt-2 text-sm text-ink-600">{topic.description}</p>
       <div className="mt-4 flex items-center justify-between">
-        <span className="text-xs font-semibold text-ink-500">Difficulty: Intermediate</span>
+        <span className="text-xs font-semibold text-ink-500">
+          Difficulty: Intermediate · {questionLabel}
+        </span>
         <button
           type="button"
-          onClick={() => toggleSelectedTopic(topic.id)}
+          onClick={() => {
+            if (!isSelected) {
+              toggleSelectedTopic(topic.id);
+            }
+          }}
+          disabled={isSelected}
           className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
             isSelected
-              ? 'bg-ink-900 text-white'
+              ? 'cursor-not-allowed bg-ink-200 text-ink-500'
               : 'border border-ink-200 text-ink-700 hover:bg-ink-50'
           }`}
         >

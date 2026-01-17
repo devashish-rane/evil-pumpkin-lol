@@ -35,6 +35,16 @@ export interface Question {
   reasonOptions?: string[];
 }
 
+export interface QuestionState {
+  questionId: string;
+  nextReviewAt: number;
+  intervalDays: number;
+  easeFactor: number;
+  correctStreak: number;
+  wrongStreak: number;
+  lastAttemptAt?: number;
+}
+
 export interface Attempt {
   id: string;
   questionId: string;

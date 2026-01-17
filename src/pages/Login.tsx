@@ -11,12 +11,12 @@ export default function Login() {
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     login(email, name || 'Learner');
-    navigate('/');
+    navigate('/topics');
   };
 
   return (
-    <div className="min-h-screen bg-ink-50 px-4 py-12">
-      <div className="mx-auto max-w-md rounded-3xl border border-ink-100 bg-white p-8 shadow-soft">
+    <div className="min-h-screen bg-ink-100 px-4 py-12">
+      <div className="mx-auto max-w-md rounded-3xl border border-ink-200 bg-white/95 p-8 shadow-soft">
         <h1 className="text-2xl font-semibold text-ink-900">Welcome back</h1>
         <p className="mt-2 text-sm text-ink-600">
           Revision is the product. Log in to face today&apos;s due recalls.

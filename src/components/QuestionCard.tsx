@@ -40,23 +40,28 @@ export default function QuestionCard({
   };
 
   return (
-    <div className="rounded-3xl border border-ink-100 bg-white p-6 shadow-soft">
+    <div className="rounded-3xl border border-ink-200 bg-white/95 p-6 shadow-soft">
       <div className="flex items-start justify-between">
         <h3 className="text-lg font-semibold text-ink-900">{question.prompt}</h3>
-        <button
-          type="button"
-          onClick={onGoodQuestion}
-          className="rounded-full border border-ink-200 px-3 py-1 text-xs font-semibold text-ink-600"
-        >
-          Good question
-        </button>
+        <div className="flex flex-col items-end gap-2">
+          <span className="rounded-full bg-ink-100 px-3 py-1 text-xs font-semibold text-ink-600">
+            Score {question.difficulty}
+          </span>
+          <button
+            type="button"
+            onClick={onGoodQuestion}
+            className="rounded-full border border-ink-200 px-3 py-1 text-xs font-semibold text-ink-600"
+          >
+            Good question
+          </button>
+        </div>
       </div>
 
       {question.type === 'ORDER' && question.items && (
         <div className="mt-4 space-y-4 text-sm text-ink-700">
           <ol className="space-y-2">
             {question.items.map((item, index) => (
-              <li key={item} className="rounded-2xl border border-ink-100 bg-ink-50 px-4 py-3">
+              <li key={item} className="rounded-2xl border border-ink-200 bg-ink-100 px-4 py-3">
                 {index + 1}. {item}
               </li>
             ))}
@@ -91,7 +96,7 @@ export default function QuestionCard({
                 className={`rounded-2xl border px-4 py-3 text-left text-sm transition ${
                   selected === label
                     ? 'border-ink-900 bg-ink-900 text-white'
-                    : 'border-ink-100 bg-ink-50 text-ink-700 hover:bg-ink-100'
+                    : 'border-ink-200 bg-ink-100 text-ink-700 hover:bg-ink-200/70'
                 }`}
               >
                 <span className="font-semibold">{label}.</span> {option}
@@ -115,7 +120,7 @@ export default function QuestionCard({
                   className={`rounded-2xl border px-4 py-3 text-left text-sm transition ${
                     reasonSelected === label
                       ? 'border-indigo-600 bg-indigo-600 text-white'
-                      : 'border-ink-100 bg-ink-50 text-ink-700 hover:bg-ink-100'
+                      : 'border-ink-200 bg-ink-100 text-ink-700 hover:bg-ink-200/70'
                   }`}
                 >
                   <span className="font-semibold">{label}.</span> {option}
@@ -146,7 +151,7 @@ export default function QuestionCard({
       </div>
 
       {submitted && (
-        <div className="mt-4 rounded-2xl border border-ink-100 bg-ink-50 p-4 text-sm text-ink-700">
+        <div className="mt-4 rounded-2xl border border-ink-200 bg-ink-100 p-4 text-sm text-ink-700">
           <div className="font-semibold text-ink-900">
             {isCorrect ? 'Why this is correct' : 'Why you failed'}
           </div>

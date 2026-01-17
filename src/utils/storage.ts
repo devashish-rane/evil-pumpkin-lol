@@ -3,6 +3,7 @@ const STORAGE_PREFIX = 'pumpkin';
 export const storageKeys = {
   user: `${STORAGE_PREFIX}.user`,
   attempts: `${STORAGE_PREFIX}.attempts`,
+  questionStates: `${STORAGE_PREFIX}.questionStates`,
   conceptStates: `${STORAGE_PREFIX}.conceptStates`,
   prefs: `${STORAGE_PREFIX}.prefs`,
   coolStuff: `${STORAGE_PREFIX}.coolStuff`

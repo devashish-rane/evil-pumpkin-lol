@@ -1,0 +1,101 @@
+#TOPIC: System Design
+#DESC: Principles for building reliable, scalable, and observable systems.
+
+##CONCEPT: Load balancing
+##PREREQ:
+##SUMMARY: Load balancers distribute traffic across healthy backends.
+
+Q: A layer 7 load balancer routes based on:
+A) IP addresses only
+B) HTTP host and path
+C) MAC addresses
+D) CPU usage only
+ANS: B
+EXPL: Layer 7 balancers can route on HTTP attributes.
+TAGS: scalability
+DIFF: 2
+---
+Q: Health checks are used to:
+A) Increase cache hit rate
+B) Remove unhealthy instances from rotation
+C) Speed up DNS propagation
+D) Encrypt traffic
+ANS: B
+EXPL: Health checks keep bad instances out of the pool.
+TAGS: reliability
+DIFF: 1
+---
+
+##CONCEPT: Caching
+##PREREQ:
+##SUMMARY: Caches reduce latency and backend load for repeated reads.
+
+Q: A cache-aside strategy means:
+A) The cache writes directly to the DB
+B) The app reads from cache, then falls back to DB and fills cache
+C) The cache is the only source of truth
+D) The cache is prewarmed only
+ANS: B
+EXPL: Cache-aside loads data into cache on a miss.
+TAGS: caching
+DIFF: 2
+---
+Q: Cache invalidation is hard because:
+A) It never affects correctness
+B) Data can change outside the cache
+C) It only applies to images
+D) It is solved by TTLs alone
+ANS: B
+EXPL: Updates must invalidate stale entries to prevent inconsistencies.
+TAGS: caching
+DIFF: 2
+---
+
+##CONCEPT: Data consistency
+##PREREQ:
+##SUMMARY: Consistency models trade off freshness for availability.
+
+Q: Eventual consistency means:
+A) Reads always see the latest write
+B) Reads may be stale temporarily
+C) Writes are rejected
+D) All replicas are locked
+ANS: B
+EXPL: Eventual consistency allows temporary staleness.
+TAGS: consistency
+DIFF: 2
+---
+Q: A strongly consistent system typically requires:
+A) Quorum or coordinated writes
+B) No replication
+C) UDP only
+D) Clients to retry forever
+ANS: A
+EXPL: Strong consistency often needs coordinated writes or quorum.
+TAGS: consistency
+DIFF: 3
+---
+
+##CONCEPT: Observability
+##PREREQ:
+##SUMMARY: Metrics, logs, and traces help understand system behavior.
+
+Q: A high-cardinality label can:
+A) Improve query performance
+B) Increase metrics storage cost
+C) Reduce alert noise
+D) Disable logging
+ANS: B
+EXPL: High cardinality increases storage and query cost.
+TAGS: observability
+DIFF: 2
+---
+Q: Tracing is best for:
+A) Tracking request flow across services
+B) Counting daily active users
+C) Storing binary blobs
+D) Rotating logs
+ANS: A
+EXPL: Traces show end-to-end request paths.
+TAGS: observability
+DIFF: 1

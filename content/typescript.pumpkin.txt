@@ -1,0 +1,101 @@
+#TOPIC: TypeScript
+#DESC: Typed superset of JavaScript that adds static checking and tooling.
+
+##CONCEPT: Type inference
+##PREREQ:
+##SUMMARY: TypeScript infers types from assignments and control flow.
+
+Q: Type inference means:
+A) All types must be explicitly written
+B) The compiler can determine types without annotations
+C) Types are removed at runtime
+D) Types are fetched from npm
+ANS: B
+EXPL: TypeScript infers types from values and flow.
+TAGS: types
+DIFF: 1
+---
+Q: Which case benefits most from explicit annotation?
+A) Simple const value
+B) Public function API
+C) Local variable inside a function
+D) A literal string assignment
+ANS: B
+EXPL: Annotating public APIs clarifies intent for callers.
+TAGS: types
+DIFF: 2
+---
+
+##CONCEPT: Generics
+##PREREQ: Type inference
+##SUMMARY: Generics allow reusable types with type parameters.
+
+Q: A generic function helps:
+A) Remove all runtime checks
+B) Preserve type information across inputs and outputs
+C) Convert JS to TS automatically
+D) Avoid interfaces
+ANS: B
+EXPL: Generics capture relationships between types.
+TAGS: generics
+DIFF: 2
+---
+Q: Which syntax defines a generic type parameter?
+A) function fn(T) {}
+B) function fn<T>() {}
+C) function fn[ T ]() {}
+D) function fn{T}() {}
+ANS: B
+EXPL: <T> declares a type parameter.
+TAGS: generics
+DIFF: 1
+---
+
+##CONCEPT: Unions and narrowing
+##PREREQ:
+##SUMMARY: Unions model multiple types; narrowing refines them via checks.
+
+Q: A union type like string | number allows:
+A) Only string values
+B) Only number values
+C) Either string or number values
+D) No values
+ANS: C
+EXPL: Union types accept any member type.
+TAGS: unions
+DIFF: 1
+---
+Q: Type narrowing happens when:
+A) You cast everything to any
+B) The compiler recognizes a type guard
+C) You disable strict mode
+D) You use var instead of let
+ANS: B
+EXPL: Type guards narrow unions within a control flow path.
+TAGS: unions
+DIFF: 2
+---
+
+##CONCEPT: Structural typing
+##PREREQ:
+##SUMMARY: Types are compatible based on shape, not explicit declarations.
+
+Q: TypeScript uses which typing system?
+A) Nominal typing
+B) Structural typing
+C) Dynamic typing only
+D) Duck typing at runtime
+ANS: B
+EXPL: Compatibility is based on structure, not named types.
+TAGS: types
+DIFF: 2
+---
+Q: Two interfaces are compatible when they:
+A) Have the same name
+B) Share the same property shapes
+C) Are declared in the same file
+D) Use the same extends clause
+ANS: B
+EXPL: Structural typing compares members by shape.
+TAGS: types
+DIFF: 2

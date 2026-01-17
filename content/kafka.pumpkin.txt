@@ -1,0 +1,101 @@
+#TOPIC: Kafka
+#DESC: Distributed event log for high-throughput streaming and durable messaging.
+
+##CONCEPT: Logs and partitions
+##PREREQ:
+##SUMMARY: Topics are split into partitions that append events in order.
+
+Q: Ordering in Kafka is guaranteed:
+A) Across all partitions of a topic
+B) Only within a single partition
+C) Only for compacted topics
+D) Only for exactly-once producers
+ANS: B
+EXPL: Kafka preserves order within a partition.
+TAGS: partitions
+DIFF: 1
+---
+Q: Partitioning helps Kafka scale by:
+A) Storing all data on one broker
+B) Spreading write load across brokers
+C) Eliminating replication
+D) Disabling consumer groups
+ANS: B
+EXPL: Partitions spread load and increase parallelism.
+TAGS: partitions
+DIFF: 2
+---
+
+##CONCEPT: Consumer groups and offsets
+##PREREQ: Logs and partitions
+##SUMMARY: Consumers track offsets per partition to coordinate progress.
+
+Q: Offsets in Kafka represent:
+A) The number of brokers in a cluster
+B) A position within a partition log
+C) The timestamp of a message
+D) A consumer ID
+ANS: B
+EXPL: Offsets are sequential positions within a partition.
+TAGS: consumers
+DIFF: 1
+---
+Q: When a consumer group rebalances, Kafka:
+A) Deletes old offsets
+B) Redistributes partitions among consumers
+C) Compresses logs
+D) Restarts the broker
+ANS: B
+EXPL: Rebalance reassigns partitions to active consumers in the group.
+TAGS: consumers
+DIFF: 2
+---
+
+##CONCEPT: Producer acks and durability
+##PREREQ:
+##SUMMARY: Producer acknowledgments control durability vs latency tradeoffs.
+
+Q: The strongest durability setting is achieved with:
+A) acks=0
+B) acks=1
+C) acks=all
+D) acks=leader
+ANS: C
+EXPL: acks=all waits for all in-sync replicas to acknowledge.
+TAGS: producers
+DIFF: 2
+---
+Q: Idempotent producers help prevent:
+A) Slow consumers
+B) Duplicate writes on retry
+C) Log compaction
+D) Partition reassignments
+ANS: B
+EXPL: Idempotence ensures retries do not create duplicates.
+TAGS: producers
+DIFF: 2
+---
+
+##CONCEPT: Streams and processing
+##PREREQ: Consumer groups and offsets
+##SUMMARY: Kafka Streams builds stateful processing on top of topics.
+
+Q: A Kafka Streams state store is used to:
+A) Store broker metadata
+B) Hold local state for processing
+C) Replace Zookeeper
+D) Encrypt messages
+ANS: B
+EXPL: State stores keep local data for aggregations and joins.
+TAGS: streams
+DIFF: 2
+---
+Q: Exactly-once processing in Kafka Streams relies on:
+A) Fire-and-forget writes
+B) Transactional producers
+C) Disabling replication
+D) External locking
+ANS: B
+EXPL: EOS uses transactions to atomically write results and offsets.
+TAGS: streams
+DIFF: 3

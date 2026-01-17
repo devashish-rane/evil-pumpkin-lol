@@ -9,8 +9,19 @@ export default function AccountMenu() {
 
   const handleLogout = () => {
     logout();
-    navigate('/login');
+    navigate('/');
   };
+
+  if (!user) {
+    return (
+      <Link
+        to="/#login"
+        className="rounded-full border border-ink-200 bg-white px-4 py-2 text-sm font-semibold text-ink-700 transition hover:bg-ink-50"
+      >
+        Log in
+      </Link>
+    );
+  }
 
   return (
     <div className="relative">
@@ -23,7 +34,7 @@ export default function AccountMenu() {
         {user?.name?.slice(0, 2).toUpperCase() ?? 'ME'}
       </button>
       {open && (
-        <div className="absolute right-0 mt-2 w-48 rounded-2xl border border-ink-100 bg-white p-2 text-sm shadow-soft">
+        <div className="absolute right-0 mt-2 w-48 rounded-2xl border border-ink-200 bg-white/95 p-2 text-sm shadow-soft">
           <Link
             to="/account"
             className="block rounded-xl px-3 py-2 text-ink-700 transition hover:bg-ink-50"

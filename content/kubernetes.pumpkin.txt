@@ -1,0 +1,101 @@
+#TOPIC: Kubernetes
+#DESC: Container orchestration platform for scheduling, scaling, and managing services.
+
+##CONCEPT: Pods and deployments
+##PREREQ:
+##SUMMARY: Pods are the smallest deployable unit; deployments manage rollout and replicas.
+
+Q: A Kubernetes Pod is:
+A) A virtual machine
+B) A group of one or more containers that share network and storage
+C) A cluster-wide load balancer
+D) A persistent volume
+ANS: B
+EXPL: Pods group containers with shared network namespace and storage.
+TAGS: pods
+DIFF: 1
+---
+Q: A Deployment primarily provides:
+A) Node autoscaling
+B) Declarative updates and replica management
+C) Network policy enforcement
+D) Storage provisioning
+ANS: B
+EXPL: Deployments manage replica sets and rollouts.
+TAGS: deployments
+DIFF: 2
+---
+
+##CONCEPT: Services and networking
+##PREREQ: Pods and deployments
+##SUMMARY: Services provide stable networking for dynamic pod IPs.
+
+Q: A ClusterIP Service exposes:
+A) A public IP on every node
+B) An internal virtual IP inside the cluster
+C) An external load balancer
+D) A DNS entry outside the cluster
+ANS: B
+EXPL: ClusterIP is internal-only by default.
+TAGS: networking
+DIFF: 1
+---
+Q: Which resource routes HTTP traffic by hostname and path?
+A) ConfigMap
+B) Ingress
+C) DaemonSet
+D) Secret
+ANS: B
+EXPL: Ingress defines HTTP routing rules.
+TAGS: networking
+DIFF: 2
+---
+
+##CONCEPT: Scheduling and resources
+##PREREQ:
+##SUMMARY: Schedulers place pods based on resource requests, limits, and constraints.
+
+Q: CPU requests are used by the scheduler to:
+A) Encrypt traffic
+B) Decide pod placement
+C) Allocate storage classes
+D) Restart failed pods
+ANS: B
+EXPL: Requests inform scheduling decisions.
+TAGS: scheduling
+DIFF: 2
+---
+Q: A taint on a node does what?
+A) Prevents all pods from scheduling forever
+B) Repels pods unless they tolerate it
+C) Deletes existing pods immediately
+D) Disables the kubelet
+ANS: B
+EXPL: Taints repel pods without matching tolerations.
+TAGS: scheduling
+DIFF: 3
+---
+
+##CONCEPT: Config and secrets
+##PREREQ: Pods and deployments
+##SUMMARY: ConfigMaps and Secrets inject configuration into workloads.
+
+Q: Secrets differ from ConfigMaps because:
+A) They are namespaced per node
+B) They are base64-encoded and intended for sensitive data
+C) They are stored outside etcd by default
+D) They cannot be mounted as files
+ANS: B
+EXPL: Secrets are base64-encoded and used for sensitive data.
+TAGS: configuration
+DIFF: 2
+---
+Q: The most common way to update config without rebuilding an image is:
+A) Hardcode it in the container
+B) Use ConfigMaps and mount or env inject
+C) Use node labels
+D) Use pod annotations only
+ANS: B
+EXPL: ConfigMaps can be mounted or injected as env vars.
+TAGS: configuration
+DIFF: 2

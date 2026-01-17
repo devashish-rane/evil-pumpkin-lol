@@ -1,0 +1,101 @@
+#TOPIC: PostgreSQL
+#DESC: Relational database focused on ACID guarantees, rich SQL, and extensibility.
+
+##CONCEPT: Query planner basics
+##PREREQ:
+##SUMMARY: The planner chooses an execution strategy using statistics, costs, and indexes.
+
+Q: EXPLAIN in Postgres primarily shows:
+A) The exact runtime of a query
+B) The planned execution strategy and estimated costs
+C) The network round-trip time
+D) The current locks on a table
+ANS: B
+EXPL: EXPLAIN shows the chosen plan and estimated costs; ANALYZE adds actual runtime.
+TAGS: query-planning
+DIFF: 2
+---
+Q: Which command updates planner statistics for a table?
+A) VACUUM
+B) ANALYZE
+C) REINDEX
+D) CLUSTER
+ANS: B
+EXPL: ANALYZE gathers stats used by the planner.
+TAGS: query-planning
+DIFF: 2
+---
+
+##CONCEPT: Indexes and access paths
+##PREREQ: Query planner basics
+##SUMMARY: Index choice affects lookup speed, range scans, and full-text search.
+
+Q: The default index type in PostgreSQL is:
+A) Hash
+B) B-tree
+C) GIN
+D) BRIN
+ANS: B
+EXPL: B-tree is the default and supports equality and range queries.
+TAGS: indexes
+DIFF: 1
+---
+Q: Which index is best suited for full-text search or array containment?
+A) B-tree
+B) GIN
+C) Hash
+D) SP-GiST
+ANS: B
+EXPL: GIN indexes handle composite values and full-text search efficiently.
+TAGS: indexes
+DIFF: 2
+---
+
+##CONCEPT: Transactions and MVCC
+##PREREQ:
+##SUMMARY: MVCC keeps readers and writers from blocking each other by using snapshots.
+
+Q: MVCC in Postgres means:
+A) Readers block writers by default
+B) Writers block readers by default
+C) Readers see a consistent snapshot without blocking writers
+D) All transactions are serializable automatically
+ANS: C
+EXPL: MVCC gives each transaction a snapshot so reads do not block writes.
+TAGS: transactions
+DIFF: 2
+---
+Q: Which isolation level allows phantom reads but prevents dirty reads?
+A) Read committed
+B) Serializable
+C) Read uncommitted
+D) Repeatable read
+ANS: A
+EXPL: Read committed prevents dirty reads but allows non-repeatable reads and phantoms.
+TAGS: transactions
+DIFF: 3
+---
+
+##CONCEPT: Replication and backups
+##PREREQ: Transactions and MVCC
+##SUMMARY: WAL and streaming replication provide durability and recovery options.
+
+Q: WAL stands for:
+A) Write Ahead Log
+B) Wide Area Link
+C) Write After Lock
+D) Web Access Layer
+ANS: A
+EXPL: WAL is the append-only log for changes and crash recovery.
+TAGS: replication
+DIFF: 1
+---
+Q: Streaming replication in Postgres is primarily:
+A) Synchronous and blocking by default
+B) Asynchronous by default
+C) Snapshot-only without WAL
+D) Only for logical replication
+ANS: B
+EXPL: Streaming replication is async by default; synchronous mode is optional.
+TAGS: replication
+DIFF: 2

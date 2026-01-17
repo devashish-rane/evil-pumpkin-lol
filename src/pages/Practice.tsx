@@ -1,8 +1,13 @@
 import React, { useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import QuestionCard from '../components/QuestionCard';
 import type { Attempt, Question } from '../models/types';
-import { getInitialConceptState, pickQuestionVariant, updateConceptState as updateState } from '../scheduler/scheduler';
+import {
+  getInitialConceptState,
+  getInitialQuestionState,
+  updateConceptState as updateConceptStateSchedule,
+  updateQuestionState as updateQuestionStateSchedule
+} from '../scheduler/scheduler';
 import { useData } from '../store/DataContext';
 
 const curiosityFacts = [
@@ -15,15 +20,22 @@ export default function Practice() {
   const {
     topics,
     conceptStates,
+    questionStates,
     attempts,
+    prefs,
     addAttempt,
     updateConceptState,
+    updateQuestionState,
     markGoodQuestion,
     addCuriosity
   } = useData();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const mode = searchParams.get('mode') ?? 'daily';
   const topicId = searchParams.get('topic');
+  const conceptId = searchParams.get('concept');
+  const scope = searchParams.get('scope') ?? 'all';
+  const status = searchParams.get('status') ?? 'due';
   const [index, setIndex] = useState(0);
   const [showCuriosity, setShowCuriosity] = useState(false);
   const [curiosityIndex, setCuriosityIndex] = useState(0);
@@ -33,27 +45,70 @@ export default function Practice() {
     if (topicId) {
       return topics.filter((topic) => topic.id === topicId);
     }
+    if (scope === 'selected') {
+      return topics.filter((topic) => prefs.selectedTopicIds.includes(topic.id));
+    }
     return topics;
-  }, [topicId, topics]);
+  }, [prefs.selectedTopicIds, scope, topicId, topics]);
 
   const questionQueue = useMemo(() => {
     const questions: Question[] = [];
     const history = attempts.map((attempt) => attempt.questionId);
+    const lastAttemptByQuestion = new Map<string, Attempt>();
+    attempts.forEach((attempt) => {
+      const existing = lastAttemptByQuestion.get(attempt.questionId);
+      if (!existing || attempt.timestamp > existing.timestamp) {
+        lastAttemptByQuestion.set(attempt.questionId, attempt);
+      }
+    });
+    const questionStateById = new Map(
+      questionStates.map((state) => [state.questionId, state])
+    );
 
     relevantTopics.forEach((topic) => {
       topic.concepts.forEach((concept) => {
-        const state = conceptStates.find((item) => item.conceptId === concept.id);
-        const due = state ? state.nextReviewAt <= Date.now() : true;
-        // Boss battle and learn modes intentionally ignore due-ness to mix content.
-        if (mode === 'boss' || mode === 'learn' || mode === 'review' || due) {
-          const question = pickQuestionVariant(concept.questions, history);
-          questions.push(question);
+        if (conceptId && concept.id !== conceptId) {
+          return;
         }
+        const dueQuestions = concept.questions.filter((question) => {
+          const state = questionStateById.get(question.id);
+          return state ? state.nextReviewAt <= Date.now() : true;
+        });
+        if (status !== 'due') {
+          const filtered = concept.questions.filter((question) => {
+            const lastAttempt = lastAttemptByQuestion.get(question.id);
+            if (status === 'failed') return lastAttempt ? !lastAttempt.correct : false;
+            if (status === 'passed') return lastAttempt ? lastAttempt.correct : false;
+            if (status === 'untouched') return !lastAttempt;
+            return true;
+          });
+          const unseen = filtered.filter((question) => !history.includes(question.id));
+          const seen = filtered.filter((question) => history.includes(question.id));
+          questions.push(...unseen, ...seen);
+          return;
+        }
+        if (mode === 'review') {
+          const failedQuestions = concept.questions.filter((question) => {
+            const lastAttempt = lastAttemptByQuestion.get(question.id);
+            return lastAttempt ? !lastAttempt.correct : false;
+          });
+          questions.push(...failedQuestions);
+          return;
+        }
+        if (mode === 'boss' || mode === 'learn') {
+          const unseen = concept.questions.filter((question) => !history.includes(question.id));
+          const seen = concept.questions.filter((question) => history.includes(question.id));
+          questions.push(...unseen, ...seen);
+          return;
+        }
+        const unseen = dueQuestions.filter((question) => !history.includes(question.id));
+        const seen = dueQuestions.filter((question) => history.includes(question.id));
+        questions.push(...unseen, ...seen);
       });
     });
 
     return questions;
-  }, [attempts, conceptStates, mode, relevantTopics]);
+  }, [attempts, conceptId, mode, questionStates, relevantTopics, status]);
 
   const currentQuestion = questionQueue[index];
   const currentConcept = useMemo(() => {
@@ -84,9 +139,22 @@ export default function Practice() {
       reasonSelected
     };
     addAttempt(attempt);
-    const state = conceptStates.find((item) => item.conceptId === currentQuestion.conceptId);
-    const updated = updateState(state ?? getInitialConceptState(currentQuestion.conceptId), attempt.correct);
-    updateConceptState(updated);
+    const conceptState = conceptStates.find(
+      (item) => item.conceptId === currentQuestion.conceptId
+    );
+    const updatedConcept = updateConceptStateSchedule(
+      conceptState ?? getInitialConceptState(currentQuestion.conceptId),
+      attempt.correct
+    );
+    updateConceptState(updatedConcept);
+    const questionState = questionStates.find(
+      (item) => item.questionId === currentQuestion.id
+    );
+    const updatedQuestion = updateQuestionStateSchedule(
+      questionState ?? getInitialQuestionState(currentQuestion.id),
+      attempt.correct
+    );
+    updateQuestionState(updatedQuestion);
 
     if (isCorrect) {
       const nextSuccessCount = successCount + 1;
@@ -109,12 +177,16 @@ export default function Practice() {
 
   const handleNext = () => {
     setShowCuriosity(false);
+    if (index + 1 >= questionQueue.length) {
+      navigate(topicId ? `/topic/${topicId}` : '/topics');
+      return;
+    }
     setIndex((prev) => Math.min(prev + 1, questionQueue.length - 1));
   };
 
   if (!currentQuestion) {
     return (
-      <div className="mx-auto max-w-2xl rounded-3xl border border-ink-100 bg-white p-6 text-center shadow-soft">
+      <div className="mx-auto max-w-3xl rounded-3xl border border-ink-200 bg-white/90 p-6 text-center shadow-soft">
         <h1 className="text-lg font-semibold text-ink-900">No questions due.</h1>
         <p className="mt-2 text-sm text-ink-600">
           You cleared the queue. Come back later for your next review window.
@@ -124,14 +196,22 @@ export default function Practice() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div className="rounded-3xl border border-ink-100 bg-white p-5 shadow-soft">
+    <div className="mx-auto max-w-5xl space-y-6">
+      <div className="rounded-3xl border border-ink-200 bg-white/90 p-5 shadow-soft">
         <div className="text-xs uppercase tracking-wide text-ink-500">
-          {mode === 'boss'
-            ? 'Weekly Boss Battle'
-            : mode === 'learn'
-              ? 'Learn Concept'
-              : 'Daily At-risk Queue'}
+          {status === 'failed'
+            ? 'Failed questions'
+            : status === 'passed'
+              ? 'Passed questions'
+              : status === 'untouched'
+                ? 'Untouched questions'
+                : status === 'all'
+                  ? 'All selected questions'
+                  : mode === 'boss'
+                    ? 'Weekly Boss Battle'
+                    : mode === 'learn'
+                      ? 'Learn Concept'
+                      : 'Daily At-risk Queue'}
         </div>
         <div className="mt-2 flex items-center justify-between text-sm text-ink-600">
           <span>
@@ -144,7 +224,7 @@ export default function Practice() {
       </div>
 
       {mode === 'learn' && currentConcept && (
-        <div className="rounded-3xl border border-ink-100 bg-white p-6 shadow-soft">
+        <div className="rounded-3xl border border-ink-200 bg-white/90 p-6 shadow-soft">
           <div className="text-xs uppercase tracking-wide text-ink-500">Concept summary</div>
           <h2 className="mt-2 text-lg font-semibold text-ink-900">{currentConcept.title}</h2>
           <p className="mt-2 text-sm text-ink-700">{currentConcept.summary}</p>
@@ -172,12 +252,12 @@ export default function Practice() {
           onClick={handleNext}
           className="rounded-full bg-saffron-500 px-5 py-2 text-sm font-semibold text-ink-900"
         >
-          Next
+          {index + 1 === questionQueue.length ? 'Finish' : 'Next'}
         </button>
       </div>
 
       {showCuriosity && (
-        <div className="rounded-3xl border border-ink-100 bg-white p-6 shadow-soft">
+        <div className="rounded-3xl border border-ink-200 bg-white/90 p-6 shadow-soft">
           <div className="text-xs uppercase tracking-wide text-ink-500">Culture break</div>
           <p className="mt-2 text-sm text-ink-700">{curiosityFacts[curiosityIndex]}</p>
           <div className="mt-4 flex justify-end">

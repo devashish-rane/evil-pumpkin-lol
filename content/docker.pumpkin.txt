@@ -1,0 +1,101 @@
+#TOPIC: Docker
+#DESC: Container runtime for packaging applications with isolated dependencies.
+
+##CONCEPT: Images and layers
+##PREREQ:
+##SUMMARY: Docker images are built in layers that can be cached and shared.
+
+Q: Docker image layers are:
+A) Rebuilt on every run
+B) Immutable and cached between builds
+C) Stored only in memory
+D) Created only for base images
+ANS: B
+EXPL: Layers are immutable and cached to speed up builds.
+TAGS: images
+DIFF: 1
+---
+Q: A smaller image size is best achieved by:
+A) Adding more RUN steps
+B) Using a multi-stage build
+C) Disabling the build cache
+D) Using root for all steps
+ANS: B
+EXPL: Multi-stage builds drop build-time dependencies.
+TAGS: images
+DIFF: 2
+---
+
+##CONCEPT: Containers and runtime
+##PREREQ:
+##SUMMARY: Containers are isolated processes sharing the host kernel.
+
+Q: Containers differ from VMs because they:
+A) Have their own kernel
+B) Share the host kernel
+C) Require a hypervisor for every process
+D) Cannot be stopped
+ANS: B
+EXPL: Containers are OS-level isolation sharing the host kernel.
+TAGS: runtime
+DIFF: 1
+---
+Q: The default process in a container is defined by:
+A) EXPOSE
+B) CMD or ENTRYPOINT
+C) WORKDIR
+D) VOLUME
+ANS: B
+EXPL: CMD and ENTRYPOINT define the container's default process.
+TAGS: runtime
+DIFF: 2
+---
+
+##CONCEPT: Networking
+##PREREQ: Containers and runtime
+##SUMMARY: Docker networking connects containers with bridges, ports, and overlays.
+
+Q: The default Docker network driver is:
+A) host
+B) bridge
+C) overlay
+D) macvlan
+ANS: B
+EXPL: bridge is the default network driver.
+TAGS: networking
+DIFF: 1
+---
+Q: Publishing a container port does what?
+A) Exposes it on the host interface
+B) Creates a new image layer
+C) Encrypts container traffic
+D) Changes the PID namespace
+ANS: A
+EXPL: Port publishing maps container ports to host ports.
+TAGS: networking
+DIFF: 2
+---
+
+##CONCEPT: Volumes and storage
+##PREREQ:
+##SUMMARY: Volumes persist data outside the container filesystem.
+
+Q: Docker volumes are preferred over bind mounts when:
+A) You need the host path visible
+B) You want Docker-managed persistent storage
+C) You need to edit files directly
+D) You want no data persistence
+ANS: B
+EXPL: Volumes are managed by Docker and decouple storage from host paths.
+TAGS: storage
+DIFF: 2
+---
+Q: Removing a container automatically removes:
+A) All named volumes
+B) Anonymous volumes only
+C) No volumes by default
+D) The Docker image
+ANS: C
+EXPL: Volumes persist unless explicitly removed.
+TAGS: storage
+DIFF: 2

@@ -1,4 +1,4 @@
-import type { ConceptState, MasteryLevel, Question } from '../models/types';
+import type { ConceptState, MasteryLevel, Question, QuestionState } from '../models/types';
 
 // Ordering is explicit so the algorithm never depends on enum string comparisons.
 const masteryOrder: MasteryLevel[] = [
@@ -17,6 +17,8 @@ const reviewIntervals: Record<MasteryLevel, number> = {
   InterviewReady: 1000 * 60 * 60 * 24 * 10
 };
 
+const DAY_MS = 1000 * 60 * 60 * 24;
+
 export function getInitialConceptState(conceptId: string): ConceptState {
   return {
     conceptId,
@@ -25,6 +27,17 @@ export function getInitialConceptState(conceptId: string): ConceptState {
     correctStreak: 0,
     wrongStreak: 0,
     goodQuestionSignal: 0
+  };
+}
+
+export function getInitialQuestionState(questionId: string): QuestionState {
+  return {
+    questionId,
+    nextReviewAt: Date.now(),
+    intervalDays: 1,
+    easeFactor: 2.3,
+    correctStreak: 0,
+    wrongStreak: 0
   };
 }
 
@@ -54,10 +67,35 @@ export function updateConceptState(
   };
 }
 
-export function computeAtRiskQueue(
-  states: ConceptState[],
+export function updateQuestionState(
+  state: QuestionState,
+  correct: boolean
+): QuestionState {
+  const now = Date.now();
+  const wrongStreak = correct ? 0 : state.wrongStreak + 1;
+  const correctStreak = correct ? state.correctStreak + 1 : 0;
+  const easeFactor = correct
+    ? Math.min(2.8, state.easeFactor + 0.1)
+    : Math.max(1.3, state.easeFactor - 0.2);
+  const intervalDays = correct
+    ? Math.max(1, state.intervalDays * easeFactor)
+    : Math.max(0.5, state.intervalDays * 0.5);
+
+  return {
+    ...state,
+    easeFactor,
+    intervalDays,
+    correctStreak,
+    wrongStreak,
+    lastAttemptAt: now,
+    nextReviewAt: now + intervalDays * DAY_MS
+  };
+}
+
+export function computeAtRiskQueue<T extends { nextReviewAt: number }>(
+  states: T[],
   now = Date.now()
-): ConceptState[] {
+): T[] {
   return states
     .filter((state) => state.nextReviewAt <= now)
     .sort((a, b) => a.nextReviewAt - b.nextReviewAt);
