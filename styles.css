@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  font-family: "Inter", "SF Pro Text", system-ui, -apple-system, sans-serif;
+}
+
+body {
+  @apply bg-slate-50 text-charcoal-900 antialiased;
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl bg-white shadow-card border border-slate-100;
+  }
+
+  .card-hover {
+    @apply transition-all duration-200 ease-out hover:shadow-lift hover:-translate-y-1;
+  }
+
+  .pill {
+    @apply inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold;
+  }
+}
