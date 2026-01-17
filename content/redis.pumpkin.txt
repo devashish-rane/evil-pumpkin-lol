@@ -1,0 +1,993 @@
+#TOPIC: Redis
+#DESC: In-memory data store used for caching, queues, and real-time workloads.
+
+##CONCEPT: Single-threaded event loop
+##PREREQ:
+##SUMMARY: Redis processes commands largely in a single thread to avoid lock contention.
+
+Q: Redis is single-threaded primarily to:
+A) Reduce memory usage
+B) Avoid locks and context switching
+C) Improve disk durability
+D) Support sharding automatically
+ANS: B
+EXPL: Single-threading reduces lock contention and context switching; Redis scales via I/O multiplexing and sharding/replication patterns.
+TAGS: architecture,performance
+MISCONCEPT: people think “single-threaded = slow” or “it’s legacy”
+DIFF: 2
+VAR: single_thread_core
+---
+
+Q: If Redis CPU is low but latency spikes, a likely cause is:
+A) Too many keys
+B) Slow clients/backpressure
+C) AOF always improves throughput
+D) TTL automatically evicts to free memory
+ANS: B
+EXPL: Slow clients can cause output buffer growth and event loop delays; latency can rise without high CPU.
+TAGS: prod,latency
+MISCONCEPT: “low CPU means no bottleneck”
+DIFF: 3
+VAR: perf_latency
+---
+
+TYPE: FILL
+Q: Redis does not evict keys unless ______ is set.
+BLANK: maxmemory
+ANS: maxmemory
+EXPL: Without maxmemory, eviction policy won’t trigger; writes can fail.
+TAGS: memory
+MISCONCEPT: “Redis always evicts”
+DIFF: 2
+VAR: eviction_basics
+---
+
+Q: The single-threaded design makes Redis especially sensitive to:
+A) CPU cache misses
+B) Long-running commands
+C) Packet loss
+D) DNS lookup failures
+ANS: B
+EXPL: A long-running command blocks the event loop and delays all clients.
+TAGS: performance
+MISCONCEPT: “slow ops only affect one client”
+DIFF: 2
+VAR: long_running_ops
+---
+
+TYPE: ORDER
+Q: Order the steps in a Redis command execution.
+ITEMS:
+1) Client request parsed
+2) Command executed in event loop
+3) Response written to output buffer
+4) Socket flush
+ANS: 1,2,3,4
+EXPL: Redis parses, executes, buffers, then flushes on the socket.
+TAGS: architecture
+MISCONCEPT: “commands execute during socket flush”
+DIFF: 2
+VAR: cmd_flow
+---
+
+TYPE: TWO_STEP
+Q: Redis handles many connections efficiently because it uses:
+A) One thread per client
+B) I/O multiplexing
+C) Kernel bypass
+D) Disk batching
+ANS: B
+REASON: The event loop can watch many sockets without blocking by relying on:
+RA) Epoll/kqueue selectors
+RB) Forked workers
+RC) Global locks
+RD) Busy-wait loops
+REASON_ANS: RA
+EXPL: Multiplexed I/O lets a single thread handle many sockets via epoll/kqueue.
+TAGS: networking
+MISCONCEPT: “Redis is fast because of multi-threading”
+DIFF: 3
+VAR: io_multiplexing
+---
+
+##CONCEPT: Networking, pipelining, and backpressure
+##PREREQ: Single-threaded event loop
+##SUMMARY: Redis optimizes throughput with pipelining but can stall on slow consumers.
+
+Q: Pipelining improves throughput because it:
+A) Enables multi-threading
+B) Reduces round-trip latency per command batch
+C) Compresses responses automatically
+D) Prioritizes read commands
+ANS: B
+EXPL: Pipelining batches commands, reducing round-trips and TCP overhead.
+TAGS: networking,performance
+MISCONCEPT: “pipelining reduces server CPU”
+DIFF: 2
+VAR: pipeline_basics
+---
+
+Q: A large client output buffer usually indicates:
+A) Too many write commands
+B) Slow client consumption
+C) RDB fork overhead
+D) Hot key deletion
+ANS: B
+EXPL: Slow clients cause their output buffers to grow, risking latency spikes.
+TAGS: networking,latency
+MISCONCEPT: “output buffers are about server CPU”
+DIFF: 3
+VAR: output_buffer
+---
+
+TYPE: FILL
+Q: Redis uses ______ to handle many client sockets in a single thread.
+BLANK: I/O multiplexing
+ANS: I/O multiplexing
+EXPL: Epoll/kqueue/select allow a single thread to manage many sockets.
+TAGS: networking
+MISCONCEPT: “single-threaded means one connection at a time”
+DIFF: 2
+VAR: io_multiplexing
+---
+
+Q: When should you avoid extreme pipelining?
+A) When commands are idempotent
+B) When client memory is limited
+C) When network latency is low
+D) When keys are small
+ANS: B
+EXPL: Very large pipelines can blow up client memory and increase tail latency.
+TAGS: performance
+MISCONCEPT: “more pipelining is always better”
+DIFF: 3
+VAR: pipeline_limits
+---
+
+TYPE: ORDER
+Q: Order the typical backpressure warning signals.
+ITEMS:
+1) Client output buffer grows
+2) Latency increases
+3) Slowlog entries rise
+4) Timeout disconnects occur
+ANS: 1,2,3,4
+EXPL: Buffer growth precedes latency and slowlog, culminating in timeouts.
+TAGS: prod
+MISCONCEPT: “timeouts are the first signal”
+DIFF: 3
+VAR: backpressure_signals
+---
+
+Q: Pipelining most directly reduces:
+A) Memory usage
+B) Command parsing time
+C) Network round trips
+D) CPU context switches
+ANS: C
+EXPL: Pipelining batches requests, reducing round trips per command.
+TAGS: performance
+MISCONCEPT: “pipelining is a CPU optimization”
+DIFF: 2
+VAR: pipeline_basics
+---
+
+##CONCEPT: Persistence (RDB & AOF)
+##PREREQ: Single-threaded event loop
+##SUMMARY: Redis persistence trades latency for durability via snapshots and append-only logs.
+
+Q: RDB snapshots are created by:
+A) Blocking all clients
+B) A background forked process
+C) Streaming commands over replicas
+D) Flushing AOF buffers
+ANS: B
+EXPL: Redis forks to create a snapshot without blocking the event loop for long.
+TAGS: persistence
+MISCONCEPT: “RDB always blocks clients”
+DIFF: 2
+VAR: rdb_fork
+---
+
+Q: AOF provides durability by:
+A) Writing full snapshots to disk
+B) Appending each write command to a log
+C) Storing data in memory-mapped files
+D) Replicating to all replicas
+ANS: B
+EXPL: AOF logs each write command for replay during recovery.
+TAGS: persistence
+MISCONCEPT: “AOF is just a snapshot”
+DIFF: 2
+VAR: aof_core
+---
+
+TYPE: FILL
+Q: The safest AOF fsync policy for durability is ______.
+BLANK: always
+ANS: always
+EXPL: fsync always offers the strongest durability but higher latency.
+TAGS: persistence
+MISCONCEPT: “everysec is always durable”
+DIFF: 2
+VAR: aof_fsync
+---
+
+Q: AOF rewrite reduces file size by:
+A) Deleting old keys immediately
+B) Rewriting to minimal commands
+C) Compressing old entries
+D) Dropping volatile keys
+ANS: B
+EXPL: Rewrite reconstructs the dataset as a minimal sequence of commands.
+TAGS: persistence
+MISCONCEPT: “rewrite is a simple truncate”
+DIFF: 3
+VAR: aof_rewrite
+---
+
+TYPE: ORDER
+Q: Order the events of an RDB snapshot with copy-on-write.
+ITEMS:
+1) Fork background process
+2) Parent continues serving clients
+3) Child writes snapshot to disk
+4) Fork finishes, child exits
+ANS: 1,2,3,4
+EXPL: Redis forks, parent handles requests, child writes snapshot.
+TAGS: persistence
+MISCONCEPT: “parent stops handling requests”
+DIFF: 2
+VAR: rdb_flow
+---
+
+Q: AOF rewrite is often triggered when:
+A) RDB is disabled
+B) AOF grows beyond a configured threshold
+C) Memory usage is low
+D) A replica disconnects
+ANS: B
+EXPL: AOF rewrite is scheduled based on size and growth thresholds.
+TAGS: persistence
+MISCONCEPT: “rewrite is manual only”
+DIFF: 3
+VAR: aof_rewrite
+---
+
+##CONCEPT: Eviction vs Expiration
+##PREREQ: Single-threaded event loop
+##SUMMARY: Expiration is TTL-based; eviction occurs under maxmemory pressure depending on policy.
+
+Q: Redis will evict keys automatically when memory increases.
+A) True
+B) False
+C) Only with AOF
+D) Only with replication
+ANS: B
+EXPL: Eviction depends on maxmemory and eviction policy; without maxmemory, Redis may error on writes rather than evict.
+TAGS: memory
+MISCONCEPT: “Redis always evicts”
+DIFF: 2
+VAR: eviction_basics
+---
+
+Q: TTL expiration is handled by:
+A) Only lazy expiration during reads
+B) Lazy expiration plus active sampling
+C) A background full scan
+D) Replication layer only
+ANS: B
+EXPL: Redis uses lazy expiration and an active sampling loop to expire keys.
+TAGS: memory
+MISCONCEPT: “TTL only happens on read”
+DIFF: 3
+VAR: expiration_sampling
+---
+
+TYPE: FILL
+Q: The eviction policy that removes the least recently used keys is ______.
+BLANK: allkeys-lru
+ANS: allkeys-lru
+EXPL: allkeys-lru removes least recently used keys across the keyspace.
+TAGS: memory
+MISCONCEPT: “volatile-lru equals allkeys-lru”
+DIFF: 2
+VAR: eviction_policies
+---
+
+Q: Setting volatile-ttl eviction means Redis will:
+A) Evict only keys with an expire set
+B) Evict only keys without TTL
+C) Evict only keys accessed least recently
+D) Evict based on frequency
+ANS: A
+EXPL: volatile-ttl evicts among keys with TTLs only.
+TAGS: memory
+MISCONCEPT: “volatile policies cover all keys”
+DIFF: 2
+VAR: eviction_policies
+---
+
+TYPE: ORDER
+Q: Order the path when a write occurs at maxmemory with allkeys-lru.
+ITEMS:
+1) Write command received
+2) Eviction policy evaluated
+3) Keys evicted (if possible)
+4) Write succeeds or errors
+ANS: 1,2,3,4
+EXPL: Redis evaluates policy before accepting the write.
+TAGS: memory
+MISCONCEPT: “write always succeeds under pressure”
+DIFF: 2
+VAR: eviction_flow
+---
+
+Q: TTL in Redis is stored as:
+A) Absolute UNIX time in milliseconds
+B) Relative duration only
+C) Seconds since last read
+D) A bloom filter
+ANS: A
+EXPL: Redis stores absolute expire timestamps to compare with current time.
+TAGS: memory
+MISCONCEPT: “TTL is stored as duration only”
+DIFF: 3
+VAR: expiration_sampling
+---
+
+##CONCEPT: Core data structures
+##PREREQ:
+##SUMMARY: Redis data types are optimized for specific access patterns.
+
+Q: Hashes in Redis are best for:
+A) Ranking leaderboards
+B) Object-like attribute storage
+C) FIFO queues only
+D) Graph traversal
+ANS: B
+EXPL: Hashes store fields and values efficiently for object-like data.
+TAGS: data-structures
+MISCONCEPT: “hashes are always slower than strings”
+DIFF: 2
+VAR: hashes_use
+---
+
+Q: Sorted sets are commonly used for:
+A) Session storage
+B) Leaderboards with scores
+C) Simple counters
+D) Bit flags
+ANS: B
+EXPL: Sorted sets maintain ordered scores for ranking queries.
+TAGS: data-structures
+MISCONCEPT: “lists are best for ranking”
+DIFF: 2
+VAR: zset_use
+---
+
+TYPE: FILL
+Q: Lists are typically used to build ______ queues.
+BLANK: FIFO
+ANS: FIFO
+EXPL: Lists can push/pop from both ends to implement queues.
+TAGS: data-structures
+MISCONCEPT: “lists are only for stacks”
+DIFF: 1
+VAR: list_use
+---
+
+Q: Which type is best for unique membership checks?
+A) Lists
+B) Sets
+C) Strings
+D) Hashes
+ANS: B
+EXPL: Sets enforce uniqueness and support membership queries.
+TAGS: data-structures
+MISCONCEPT: “lists are fine for membership”
+DIFF: 1
+VAR: set_membership
+---
+
+TYPE: ORDER
+Q: Order the steps in a producer-consumer list queue.
+ITEMS:
+1) Producer LPUSH
+2) Consumer BRPOP
+3) Consumer processes work
+4) Producer ACKs result
+ANS: 1,2,3,4
+EXPL: Producer pushes, consumer pops, processes, and ACKs.
+TAGS: data-structures
+MISCONCEPT: “consumer pops before push”
+DIFF: 2
+VAR: list_queue
+---
+
+Q: HyperLogLog is used for:
+A) Precise counting of values
+B) Approximate cardinality
+C) Sorting by score
+D) TTL expiration
+ANS: B
+EXPL: HyperLogLog provides approximate cardinality with low memory usage.
+TAGS: data-structures
+MISCONCEPT: “HLL is exact”
+DIFF: 3
+VAR: hll_use
+---
+
+##CONCEPT: Replication basics
+##PREREQ: Persistence (RDB & AOF)
+##SUMMARY: Replication streams write commands from primary to replicas.
+
+Q: Redis replication is primarily:
+A) Active-active by default
+B) Primary-replica with async replication
+C) Strictly synchronous across nodes
+D) Leaderless
+ANS: B
+EXPL: Redis uses async primary-replica replication by default.
+TAGS: replication
+MISCONCEPT: “replicas ack every write”
+DIFF: 2
+VAR: repl_core
+---
+
+Q: A replica is promoted to primary via:
+A) AOF rewrite
+B) Sentinel or manual failover
+C) RDB snapshot
+D) client-side sharding
+ANS: B
+EXPL: Sentinel can orchestrate failover to promote a replica.
+TAGS: replication
+MISCONCEPT: “replica promotes itself automatically”
+DIFF: 2
+VAR: repl_failover
+---
+
+TYPE: FILL
+Q: Replication starts with a ______ sync to transmit the dataset.
+BLANK: full
+ANS: full
+EXPL: Initial sync sends a full RDB snapshot to the replica.
+TAGS: replication
+MISCONCEPT: “replication starts incremental”
+DIFF: 2
+VAR: repl_sync
+---
+
+Q: Partial resync is enabled by:
+A) Global locks
+B) Replication backlog
+C) Slowlog buffer
+D) RDB compression
+ANS: B
+EXPL: The replication backlog lets replicas catch up after brief disconnects.
+TAGS: replication
+MISCONCEPT: “partial resync is always available”
+DIFF: 3
+VAR: repl_backlog
+---
+
+TYPE: ORDER
+Q: Order the replication handshake.
+ITEMS:
+1) Replica connects and issues PSYNC
+2) Primary responds with FULLRESYNC or CONTINUE
+3) RDB snapshot sent (if full)
+4) Command stream continues
+ANS: 1,2,3,4
+EXPL: Replica requests sync, primary responds, snapshot if needed, then command stream.
+TAGS: replication
+MISCONCEPT: “commands stream before snapshot”
+DIFF: 3
+VAR: repl_handshake
+---
+
+Q: Replication lag can cause:
+A) Strong consistency
+B) Read-after-write anomalies
+C) Faster failover
+D) Smaller memory usage
+ANS: B
+EXPL: Async replication means replicas may lag and serve stale reads.
+TAGS: replication
+MISCONCEPT: “replicas are always consistent”
+DIFF: 2
+VAR: repl_lag
+---
+
+##CONCEPT: Sentinel and failover
+##PREREQ: Replication basics
+##SUMMARY: Sentinel monitors primaries and orchestrates automatic failover.
+
+Q: Sentinel's primary purpose is to:
+A) Shard data
+B) Monitor and failover
+C) Provide caching
+D) Compress keys
+ANS: B
+EXPL: Sentinel monitors primaries and triggers failover when down.
+TAGS: sentinel
+MISCONCEPT: “Sentinel is a proxy”
+DIFF: 2
+VAR: sentinel_role
+---
+
+Q: A quorum in Sentinel means:
+A) All sentinels agree
+B) Enough sentinels agree on failure
+C) The primary confirms
+D) The client decides
+ANS: B
+EXPL: Quorum is the minimum number of sentinels required to mark a primary as down.
+TAGS: sentinel
+MISCONCEPT: “quorum means 100% agreement”
+DIFF: 3
+VAR: sentinel_quorum
+---
+
+TYPE: FILL
+Q: Sentinel uses a ______ election to pick a leader for failover.
+BLANK: leader
+ANS: leader
+EXPL: A leader Sentinel coordinates the failover process.
+TAGS: sentinel
+MISCONCEPT: “failover is leaderless”
+DIFF: 2
+VAR: sentinel_leader
+---
+
+Q: Clients should connect to:
+A) Only the primary IP
+B) Sentinel for discovery
+C) A random replica
+D) AOF files
+ANS: B
+EXPL: Clients use Sentinel to discover the current primary after failover.
+TAGS: sentinel
+MISCONCEPT: “hardcode primary address”
+DIFF: 2
+VAR: sentinel_clients
+---
+
+TYPE: ORDER
+Q: Order the Sentinel failover steps.
+ITEMS:
+1) Detect primary down
+2) Elect leader Sentinel
+3) Promote replica
+4) Reconfigure remaining replicas
+ANS: 1,2,3,4
+EXPL: Sentinel detects, elects leader, promotes, and reconfigures replicas.
+TAGS: sentinel
+MISCONCEPT: “replicas reconfigure before promotion”
+DIFF: 3
+VAR: sentinel_flow
+---
+
+Q: Split-brain risk is reduced by:
+A) Lower quorum
+B) Higher quorum and proper timeouts
+C) Disabling replicas
+D) Forcing RDB only
+ANS: B
+EXPL: Higher quorum and tuned timeouts reduce false positives.
+TAGS: sentinel
+MISCONCEPT: “lower quorum is safer”
+DIFF: 3
+VAR: sentinel_quorum
+---
+
+##CONCEPT: Cluster sharding
+##PREREQ: Replication basics
+##SUMMARY: Redis Cluster shards keys across hash slots and provides automatic failover per shard.
+
+Q: Redis Cluster assigns keys to:
+A) Servers directly
+B) Hash slots
+C) Database numbers
+D) Memory segments
+ANS: B
+EXPL: Cluster uses 16,384 hash slots mapped to nodes.
+TAGS: cluster
+MISCONCEPT: “cluster hashes per node”
+DIFF: 2
+VAR: cluster_slots
+---
+
+Q: A multi-key command in cluster mode requires:
+A) Keys on the same hash slot
+B) Keys on different nodes
+C) AOF enabled
+D) Sentinel configuration
+ANS: A
+EXPL: Cluster enforces keys in the same hash slot for multi-key operations.
+TAGS: cluster
+MISCONCEPT: “cluster handles multi-key automatically”
+DIFF: 3
+VAR: cluster_multikey
+---
+
+TYPE: FILL
+Q: The hash slot count in Redis Cluster is ______.
+BLANK: 16384
+ANS: 16384
+EXPL: Redis Cluster has 16,384 hash slots.
+TAGS: cluster
+MISCONCEPT: “slots equal node count”
+DIFF: 2
+VAR: cluster_slots
+---
+
+Q: Hash tags allow you to:
+A) Increase memory
+B) Force keys to same slot
+C) Disable replication
+D) Compress values
+ANS: B
+EXPL: Hash tags in braces `{}` ensure keys map to the same slot.
+TAGS: cluster
+MISCONCEPT: “hash tags are metadata only”
+DIFF: 2
+VAR: cluster_hashtag
+---
+
+TYPE: ORDER
+Q: Order the cluster resharding process.
+ITEMS:
+1) Pick source and destination slots
+2) Migrate keys for slots
+3) Update cluster configuration
+4) Clients receive new slot map
+ANS: 1,2,3,4
+EXPL: Slots are moved, config updated, clients refresh slot map.
+TAGS: cluster
+MISCONCEPT: “clients never need to refresh”
+DIFF: 3
+VAR: cluster_reshard
+---
+
+Q: Cluster failover happens:
+A) Globally across all slots
+B) Per shard group
+C) Only with Sentinel
+D) Only manually
+ANS: B
+EXPL: Each shard group can failover independently.
+TAGS: cluster
+MISCONCEPT: “cluster failover is global”
+DIFF: 3
+VAR: cluster_failover
+---
+
+##CONCEPT: Lua scripting and transactions
+##PREREQ: Single-threaded event loop
+##SUMMARY: Lua scripts and transactions provide atomic execution blocks.
+
+Q: A Redis Lua script runs:
+A) In parallel with other commands
+B) Atomically in the event loop
+C) In a background thread
+D) Only on replicas
+ANS: B
+EXPL: Lua scripts execute atomically within the single-threaded event loop.
+TAGS: scripting
+MISCONCEPT: “Lua scripts are asynchronous”
+DIFF: 2
+VAR: lua_atomic
+---
+
+Q: MULTI/EXEC provides:
+A) Isolation from reads
+B) Atomic execution of queued commands
+C) Parallel execution
+D) Automatic retries
+ANS: B
+EXPL: MULTI/EXEC batches commands for atomic execution.
+TAGS: transactions
+MISCONCEPT: “MULTI provides rollback”
+DIFF: 2
+VAR: multi_exec
+---
+
+TYPE: FILL
+Q: Redis uses ______ to check for key changes before EXEC.
+BLANK: WATCH
+ANS: WATCH
+EXPL: WATCH marks keys for optimistic concurrency; EXEC aborts if keys changed.
+TAGS: transactions
+MISCONCEPT: “WATCH guarantees lock”
+DIFF: 2
+VAR: watch_keys
+---
+
+Q: Long-running Lua scripts are dangerous because:
+A) They increase memory usage only
+B) They block the event loop
+C) They get preempted automatically
+D) They trigger AOF rewrite
+ANS: B
+EXPL: Scripts run in the main thread and block other operations.
+TAGS: scripting
+MISCONCEPT: “Lua is isolated from main loop”
+DIFF: 3
+VAR: lua_long
+---
+
+TYPE: ORDER
+Q: Order a typical optimistic transaction with WATCH.
+ITEMS:
+1) WATCH key
+2) MULTI
+3) Queue commands
+4) EXEC
+ANS: 1,2,3,4
+EXPL: WATCH first, then MULTI, queue commands, EXEC to commit.
+TAGS: transactions
+MISCONCEPT: “WATCH after MULTI”
+DIFF: 2
+VAR: watch_flow
+---
+
+Q: Lua script caching is keyed by:
+A) File name
+B) Script SHA1
+C) Timestamp
+D) Client ID
+ANS: B
+EXPL: Redis caches scripts by SHA1 of the content.
+TAGS: scripting
+MISCONCEPT: “scripts are cached by name”
+DIFF: 3
+VAR: lua_cache
+---
+
+##CONCEPT: Memory optimization & monitoring
+##PREREQ: Eviction vs Expiration
+##SUMMARY: Monitoring and memory policies keep latency stable and prevent OOM errors.
+
+Q: The INFO command provides:
+A) Only command stats
+B) System and replication metrics
+C) Only memory metrics
+D) Cluster slots only
+ANS: B
+EXPL: INFO returns metrics across memory, clients, replication, etc.
+TAGS: monitoring
+MISCONCEPT: “INFO is only memory”
+DIFF: 1
+VAR: info_metrics
+---
+
+Q: The slowlog is used to:
+A) Store every command
+B) Capture slow commands for analysis
+C) Monitor replication lag only
+D) Track AOF writes
+ANS: B
+EXPL: Slowlog captures commands exceeding a threshold.
+TAGS: monitoring
+MISCONCEPT: “slowlog is only for writes”
+DIFF: 2
+VAR: slowlog_use
+---
+
+TYPE: FILL
+Q: The maxmemory-policy setting defaults to ______.
+BLANK: noeviction
+ANS: noeviction
+EXPL: By default Redis returns errors instead of evicting keys.
+TAGS: memory
+MISCONCEPT: “LRU is default”
+DIFF: 2
+VAR: eviction_default
+---
+
+Q: Keyspace notifications are useful to:
+A) Replicate data
+B) Observe key events in real time
+C) Compress data
+D) Scale cluster slots
+ANS: B
+EXPL: Notifications allow subscribers to observe key changes.
+TAGS: monitoring
+MISCONCEPT: “notifications replace replication”
+DIFF: 2
+VAR: keyspace_events
+---
+
+TYPE: ORDER
+Q: Order the steps to diagnose latency.
+ITEMS:
+1) Check INFO and memory usage
+2) Inspect slowlog
+3) Check client buffer stats
+4) Profile specific commands
+ANS: 1,2,3,4
+EXPL: Start with high-level metrics, then dive into slowlog and buffers.
+TAGS: monitoring
+MISCONCEPT: “jump straight to profiling”
+DIFF: 2
+VAR: latency_flow
+---
+
+Q: A high fragmentation ratio suggests:
+A) Keyspace compression
+B) Memory allocator overhead
+C) Low memory usage
+D) Zero copy-on-write
+ANS: B
+EXPL: Fragmentation indicates allocator overhead or uneven free space.
+TAGS: memory
+MISCONCEPT: “fragmentation is harmless”
+DIFF: 3
+VAR: memory_fragmentation
+---
+
+##CONCEPT: Streams and consumer groups
+##PREREQ: Core data structures
+##SUMMARY: Streams provide append-only logs with consumer groups for scalable processing.
+
+Q: Redis Streams are best described as:
+A) Sorted sets
+B) Append-only logs
+C) FIFO lists only
+D) Hash maps
+ANS: B
+EXPL: Streams are append-only logs with IDs and consumer groups.
+TAGS: streams
+MISCONCEPT: “streams are just lists”
+DIFF: 2
+VAR: stream_basics
+---
+
+Q: Consumer groups allow:
+A) Exactly-once processing by default
+B) Multiple consumers sharing work
+C) Automatic sharding across clusters
+D) Removing entries on read
+ANS: B
+EXPL: Groups let multiple consumers coordinate processing.
+TAGS: streams
+MISCONCEPT: “consumer groups guarantee exactly-once”
+DIFF: 3
+VAR: stream_groups
+---
+
+TYPE: FILL
+Q: The command to acknowledge a stream entry is ______.
+BLANK: XACK
+ANS: XACK
+EXPL: XACK acknowledges entries for a consumer group.
+TAGS: streams
+MISCONCEPT: “XDEL is acknowledgment”
+DIFF: 2
+VAR: stream_ack
+---
+
+Q: Pending entries list (PEL) tracks:
+A) Messages processed successfully
+B) Messages delivered but not acknowledged
+C) Deleted messages
+D) Commands in MULTI
+ANS: B
+EXPL: PEL tracks messages delivered but unacknowledged.
+TAGS: streams
+MISCONCEPT: “PEL is a history log”
+DIFF: 3
+VAR: stream_pel
+---
+
+TYPE: ORDER
+Q: Order stream processing with consumer groups.
+ITEMS:
+1) XREADGROUP fetches entries
+2) Consumer processes work
+3) XACK acknowledges
+4) Entry removed from PEL
+ANS: 1,2,3,4
+EXPL: Fetch, process, acknowledge, then PEL cleans up.
+TAGS: streams
+MISCONCEPT: “PEL clears before ACK”
+DIFF: 2
+VAR: stream_flow
+---
+
+Q: Streams keep data by default:
+A) Forever
+B) Until XTRIM or maxlen
+C) Until AOF rewrite
+D) Only in replicas
+ANS: B
+EXPL: Streams retain data until trimmed by maxlen or manual XTRIM.
+TAGS: streams
+MISCONCEPT: “streams auto-delete after ACK”
+DIFF: 2
+VAR: stream_retention
+---
+
+##CONCEPT: Client side caching and invalidation
+##PREREQ: Networking, pipelining, and backpressure
+##SUMMARY: Client tracking enables cache invalidation for read-heavy workloads.
+
+Q: Client tracking helps with:
+A) Automatic sharding
+B) Cache invalidation
+C) Data compression
+D) Slowlog tracking
+ANS: B
+EXPL: Client tracking informs clients when cached keys are invalidated.
+TAGS: caching
+MISCONCEPT: “tracking is for auth”
+DIFF: 2
+VAR: client_tracking
+---
+
+Q: The tracking invalidation message is sent when:
+A) A key is read
+B) A key is written or evicted
+C) A connection opens
+D) The server restarts
+ANS: B
+EXPL: Invalidation occurs on writes/evictions to tracked keys.
+TAGS: caching
+MISCONCEPT: “tracking only for reads”
+DIFF: 3
+VAR: client_tracking
+---
+
+TYPE: FILL
+Q: The client tracking mode that redirects invalidations is ______.
+BLANK: redirect
+ANS: redirect
+EXPL: Redirect mode sends invalidations to a specific client connection.
+TAGS: caching
+MISCONCEPT: “tracking always broadcasts”
+DIFF: 3
+VAR: client_tracking
+---
+
+Q: Client tracking is especially useful when:
+A) Reads dominate and cache is local
+B) Writes dominate and cache is remote
+C) AOF is disabled
+D) Using single key only
+ANS: A
+EXPL: Tracking keeps local caches coherent for read-heavy workloads.
+TAGS: caching
+MISCONCEPT: “tracking helps writes”
+DIFF: 2
+VAR: client_tracking_use
+---
+
+TYPE: ORDER
+Q: Order the client-side caching flow.
+ITEMS:
+1) Client enables tracking
+2) Client reads and caches key
+3) Another client writes the key
+4) Server sends invalidation
+ANS: 1,2,3,4
+EXPL: Tracking then caching, write triggers invalidation.
+TAGS: caching
+MISCONCEPT: “invalidations arrive before writes”
+DIFF: 2
+VAR: client_tracking_flow
+---
+
+Q: Client caching reduces:
+A) Memory fragmentation
+B) Network trips for read hits
+C) AOF rewrite time
+D) Replication backlog
+ANS: B
+EXPL: Local cache hits avoid network calls to Redis.
+TAGS: caching
+MISCONCEPT: “client caching reduces server memory”
+DIFF: 2
+VAR: client_tracking_use
+---
