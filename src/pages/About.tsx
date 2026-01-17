@@ -5,34 +5,42 @@ import { useAuth } from '../store/AuthContext';
 const pillars = [
   {
     title: 'Topic',
-    copy: 'The big map. A topic frames the landscape so your brain knows the terrain.'
+    copy: 'The landscape. Topics map what interviews actually expect you to cover.'
   },
   {
     title: 'Concept',
-    copy: 'The checkpoint. Concepts are the exact ideas you must understand to move on.'
+    copy: 'The checkpoint. Concepts are the exact ideas interviewers probe for.'
   },
   {
     title: 'Question',
-    copy: 'The rep. Questions turn ideas into reflexes with instant feedback.'
+    copy: 'The rep. Interview-style prompts build realistic development instincts.'
   }
 ];
 
 const features = [
   {
-    title: 'Adaptive review',
-    copy: 'Wrong answers come back sooner. Right answers earn longer breaks.'
+    title: 'Basic to advanced coverage',
+    copy: 'Questions progress from fundamentals to interview-level depth.'
   },
   {
-    title: 'Mixed formats',
-    copy: 'MCQ, fill, ordering, and two-step reasoning keep recall sharp.'
+    title: 'Conceptual sequencing',
+    copy: 'Each concept builds on the previous one with no gaps.'
   },
   {
-    title: 'Concept clarity',
-    copy: 'Every question is anchored to a concept, not a random trivia dump.'
+    title: 'Practical focus',
+    copy: 'Real workflows, tradeoffs, and debugging decisions.'
   },
   {
-    title: 'Signal tracking',
-    copy: 'See what you missed, what you nailed, and what’s still untouched.'
+    title: 'Detailed explanations',
+    copy: 'Every miss explains the expected reasoning so you can assess and learn.'
+  },
+  {
+    title: 'Understanding first',
+    copy: 'Built to explain the why behind strong engineering choices.'
+  },
+  {
+    title: 'Interview useful',
+    copy: 'Every prompt mirrors real developer expectations.'
   }
 ];
 
@@ -76,12 +84,12 @@ export default function About() {
                 Evil Pumpkin
               </div>
               <h1 className="text-4xl font-semibold tracking-tight text-ink-900 sm:text-5xl lg:text-6xl">
-                Turn big topics into sharp, repeatable wins.
+                Get interview-ready with interview-level questions.
               </h1>
               <p className="text-base text-ink-700 sm:text-lg">
-                Evil Pumpkin breaks learning into topics, concepts, and questions that
-                actually stick. It is built for momentum, recall, and that dopamine
-                hit when the answer lands.
+                Evil Pumpkin turns real-world developer expectations into topics,
+                concepts, and questions. You assess yourself, spot gaps, and learn
+                by explaining interview-level decisions under pressure.
               </p>
               <div className="flex flex-wrap gap-3">
                 <Link
@@ -120,10 +128,10 @@ export default function About() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="animate-fade-up rounded-3xl border border-ink-200 bg-white/95 p-4 text-sm text-ink-700">
                   <div className="text-xs font-semibold uppercase tracking-wide text-ink-500">
-                    Concept locks
+                    Interview realism
                   </div>
                   <p className="mt-2">
-                    Learn in chunks so every concept feels conquerable, not chaotic.
+                    Questions mirror how interviews test fundamentals and tradeoffs.
                   </p>
                 </div>
                 <div
@@ -131,10 +139,10 @@ export default function About() {
                   style={{ animationDelay: '0.1s' }}
                 >
                   <div className="text-xs font-semibold uppercase tracking-wide text-ink-500">
-                    Question pacing
+                    Coverage depth
                   </div>
                   <p className="mt-2">
-                    The system spaces your repeats so memory compounds instead of fades.
+                    Progresses from basics to advanced so gaps show up early.
                   </p>
                 </div>
               </div>
@@ -147,11 +155,10 @@ export default function About() {
         <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr] lg:items-center">
           <div className="space-y-4">
             <h2 className="text-2xl font-semibold text-ink-900 sm:text-3xl">
-              Why it feels different
+              Interview-ready standards
             </h2>
             <p className="text-sm text-ink-600 sm:text-base">
-              We built this for people who want to feel the click of understanding. It is
-              fast, visual, and unapologetically focused on the questions that matter most.
+              We keep every topic aligned to real interview expectations and real-world work.
             </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">

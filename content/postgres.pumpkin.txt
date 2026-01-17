@@ -1,101 +1,206 @@
 #TOPIC: PostgreSQL
 #DESC: Relational database focused on ACID guarantees, rich SQL, and extensibility.
 
-##CONCEPT: Query planner basics
+##CONCEPT: Data modeling and constraints
 ##PREREQ:
-##SUMMARY: The planner chooses an execution strategy using statistics, costs, and indexes.
+##SUMMARY: Schema choices and constraints prevent data drift and simplify queries.
 
-Q: EXPLAIN in Postgres primarily shows:
-A) The exact runtime of a query
-B) The planned execution strategy and estimated costs
-C) The network round-trip time
-D) The current locks on a table
+Q: You need user sessions deleted automatically when the user is removed. What should you add?
+A) Store user email in sessions with no foreign key
+B) Create a foreign key with ON DELETE CASCADE
+C) Store the full user JSON in each session
+D) Delete sessions manually in the app on every request
 ANS: B
-EXPL: EXPLAIN shows the chosen plan and estimated costs; ANALYZE adds actual runtime.
-TAGS: query-planning
-DIFF: 2
----
-Q: Which command updates planner statistics for a table?
-A) VACUUM
-B) ANALYZE
-C) REINDEX
-D) CLUSTER
-ANS: B
-EXPL: ANALYZE gathers stats used by the planner.
-TAGS: query-planning
-DIFF: 2
----
-
-##CONCEPT: Indexes and access paths
-##PREREQ: Query planner basics
-##SUMMARY: Index choice affects lookup speed, range scans, and full-text search.
-
-Q: The default index type in PostgreSQL is:
-A) Hash
-B) B-tree
-C) GIN
-D) BRIN
-ANS: B
-EXPL: B-tree is the default and supports equality and range queries.
-TAGS: indexes
+EXPL: A foreign key with ON DELETE CASCADE keeps referential integrity and guarantees dependent rows are removed safely.
+TAGS: modeling,integrity
 DIFF: 1
 ---
-Q: Which index is best suited for full-text search or array containment?
+Q: You want stable references even if a username changes. Which approach is best?
+A) Use username as the primary key
+B) Use a surrogate primary key plus a UNIQUE constraint on username
+C) Remove the uniqueness constraint on username
+D) Store usernames in a separate table only
+ANS: B
+EXPL: A surrogate key keeps references stable while UNIQUE enforces no duplicate usernames.
+TAGS: modeling,integrity
+DIFF: 2
+---
+TYPE: TWO_STEP
+Q: You store money amounts and need exact values. Which type should you use?
+A) FLOAT
+B) NUMERIC
+C) REAL
+D) DOUBLE PRECISION
+REASON: Why is that the right choice?
+REASON_A) Floating types are faster and always exact
+REASON_B) NUMERIC avoids floating rounding errors for currency
+REASON_C) REAL stores more precision than NUMERIC
+REASON_D) DOUBLE PRECISION is always lossless for decimals
+ANS: B,B
+EXPL: NUMERIC stores exact decimal values, preventing rounding drift that can break financial accuracy.
+TAGS: modeling,types
+DIFF: 2
+---
+
+##CONCEPT: Query planning and statistics
+##PREREQ: Data modeling and constraints
+##SUMMARY: The planner relies on statistics to pick the fastest execution path.
+
+Q: After a bulk load, queries suddenly use sequential scans. What is the first fix?
+A) Run VACUUM FULL
+B) Run ANALYZE on the table
+C) Drop and recreate the index
+D) Disable sequential scans globally
+ANS: B
+EXPL: ANALYZE refreshes statistics so the planner can estimate selectivity correctly.
+TAGS: planning,performance
+DIFF: 2
+---
+Q: You need actual runtime and row counts for a slow query. Which command helps most?
+A) EXPLAIN
+B) EXPLAIN ANALYZE
+C) SHOW ALL
+D) CHECKPOINT
+ANS: B
+EXPL: EXPLAIN ANALYZE runs the query and reports real timing and row counts.
+TAGS: planning,performance
+DIFF: 1
+---
+TYPE: TWO_STEP
+Q: You added an index, but the planner still picks a sequential scan. What should you do first?
+A) REINDEX the table
+B) ANALYZE the table
+C) CLUSTER the table
+D) VACUUM FULL
+REASON: Why does that help?
+REASON_A) It compacts the table and forces index usage
+REASON_B) It updates stats so the planner can see the index selectivity
+REASON_C) It rewrites the table in index order permanently
+REASON_D) It shrinks the WAL
+ANS: B,B
+EXPL: The planner ignores indexes when stats are stale or misleading; ANALYZE fixes that.
+TAGS: planning,stats
+DIFF: 2
+---
+
+##CONCEPT: Indexing strategies
+##PREREQ: Query planning and statistics
+##SUMMARY: Index design should match access patterns and filter selectivity.
+
+Q: You frequently filter WHERE status = 'active' on a massive table. What helps most?
+A) A partial index on status = 'active'
+B) A full table index on every column
+C) A BRIN index on the primary key
+D) No index; rely on caching
+ANS: A
+EXPL: A partial index stays small and fast because it only stores active rows.
+TAGS: indexing
+DIFF: 2
+---
+Q: You need fast search on a JSONB field and array containment. Which index fits?
 A) B-tree
 B) GIN
 C) Hash
 D) SP-GiST
 ANS: B
-EXPL: GIN indexes handle composite values and full-text search efficiently.
-TAGS: indexes
+EXPL: GIN indexes are designed for composite values like JSONB and arrays.
+TAGS: indexing
 DIFF: 2
 ---
-
-##CONCEPT: Transactions and MVCC
-##PREREQ:
-##SUMMARY: MVCC keeps readers and writers from blocking each other by using snapshots.
-
-Q: MVCC in Postgres means:
-A) Readers block writers by default
-B) Writers block readers by default
-C) Readers see a consistent snapshot without blocking writers
-D) All transactions are serializable automatically
-ANS: C
-EXPL: MVCC gives each transaction a snapshot so reads do not block writes.
-TAGS: transactions
-DIFF: 2
----
-Q: Which isolation level allows phantom reads but prevents dirty reads?
-A) Read committed
-B) Serializable
-C) Read uncommitted
-D) Repeatable read
-ANS: A
-EXPL: Read committed prevents dirty reads but allows non-repeatable reads and phantoms.
-TAGS: transactions
+TYPE: TWO_STEP
+Q: You query a time-series table by date range and it keeps growing. Which index is best?
+A) B-tree on id
+B) BRIN on timestamp
+C) Hash on timestamp
+D) GIN on timestamp
+REASON: Why is that the right choice?
+REASON_A) BRIN is tiny and efficient for ordered data ranges
+REASON_B) Hash is faster for range scans
+REASON_C) GIN is optimized for range scans
+REASON_D) B-tree is always the smallest
+ANS: B,A
+EXPL: BRIN works well on large, naturally ordered tables and keeps index size small.
+TAGS: indexing,performance
 DIFF: 3
 ---
 
-##CONCEPT: Replication and backups
-##PREREQ: Transactions and MVCC
-##SUMMARY: WAL and streaming replication provide durability and recovery options.
+##CONCEPT: Transactions and isolation
+##PREREQ: Indexing strategies
+##SUMMARY: Isolation levels and locks prevent lost updates and double writes.
 
-Q: WAL stands for:
-A) Write Ahead Log
-B) Wide Area Link
-C) Write After Lock
-D) Web Access Layer
-ANS: A
-EXPL: WAL is the append-only log for changes and crash recovery.
-TAGS: replication
-DIFF: 1
----
-Q: Streaming replication in Postgres is primarily:
-A) Synchronous and blocking by default
-B) Asynchronous by default
-C) Snapshot-only without WAL
-D) Only for logical replication
+Q: Two workers may claim the same job. What query pattern prevents double-processing?
+A) SELECT * FROM jobs WHERE status='new'
+B) SELECT ... FOR UPDATE SKIP LOCKED
+C) UPDATE jobs SET status='new' WHERE id=...
+D) DELETE FROM jobs WHERE status='new'
 ANS: B
-EXPL: Streaming replication is async by default; synchronous mode is optional.
-TAGS: replication
+EXPL: FOR UPDATE SKIP LOCKED lets workers safely claim distinct rows without conflicts.
+TAGS: transactions,concurrency
+DIFF: 2
+---
+Q: You need a consistent report while writes continue in the background. Which level fits?
+A) Read uncommitted
+B) Read committed
+C) Repeatable read
+D) Serializable
+ANS: C
+EXPL: Repeatable read provides a stable snapshot without blocking writers.
+TAGS: transactions,isolation
+DIFF: 2
+---
+TYPE: TWO_STEP
+Q: Two concurrent updates keep overwriting each other. What is the best fix?
+A) Use SELECT FOR UPDATE on the row
+B) Disable autovacuum
+C) Add a new index
+D) Set synchronous_commit to off
+REASON: Why does that fix it?
+REASON_A) It locks the row so updates serialize safely
+REASON_B) It speeds up writes so conflicts disappear
+REASON_C) Indexes prevent write conflicts
+REASON_D) It avoids WAL, so no conflicts
+ANS: A,A
+EXPL: Row-level locks ensure only one transaction updates the row at a time.
+TAGS: transactions,locking
+DIFF: 3
+---
+
+##CONCEPT: Durability and high availability
+##PREREQ: Transactions and isolation
+##SUMMARY: WAL, replication, and backups keep data safe through failures.
+
+Q: You need point-in-time recovery. What is required?
+A) Logical replication only
+B) Base backups plus WAL archiving
+C) A single replica
+D) Vacuum full every day
+ANS: B
+EXPL: PITR needs base backups plus archived WAL segments to replay to a timestamp.
+TAGS: durability,backup
+DIFF: 2
+---
+Q: Your read replica lags and users need fresh reads. What should you do?
+A) Route reads to the primary
+B) Increase max_connections only
+C) Disable WAL
+D) Drop indexes
+ANS: A
+EXPL: If freshness is required, read from the primary or reduce lag with sync replication.
+TAGS: replication,ops
+DIFF: 2
+---
+TYPE: TWO_STEP
+Q: You want read scaling and can tolerate a few seconds of staleness. What setup fits?
+A) Synchronous replication
+B) Asynchronous replication
+C) Single-node only
+D) Logical decoding without replicas
+REASON: Why is that the right fit?
+REASON_A) Async replicas do not block writes and allow slight lag
+REASON_B) Sync replicas are faster and never lag
+REASON_C) Single-node scaling is best for reads
+REASON_D) Logical decoding is required for reads
+ANS: B,A
+EXPL: Async replicas keep writes fast while providing read scaling with acceptable lag.
+TAGS: replication,scaling
 DIFF: 2

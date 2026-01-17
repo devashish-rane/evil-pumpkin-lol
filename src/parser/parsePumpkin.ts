@@ -15,8 +15,6 @@ interface TempQuestion {
   misconception?: string;
   difficulty?: number;
   variantGroup?: string;
-  items?: string[];
-  blanks?: string[];
   reasonPrompt?: string;
   reasonOptions?: string[];
   lineStart?: number;
@@ -60,7 +58,11 @@ export function parsePumpkinFile(
   const flushQuestion = () => {
     if (!currentQuestion || !currentConcept) return;
     const line = currentQuestion.lineStart ?? 0;
-    const type = (currentQuestion.type ?? 'MCQ') as Question['type'];
+    const rawType = (currentQuestion.type ?? 'MCQ').trim();
+    const type: Question['type'] = rawType === 'TWO_STEP' ? 'TWO_STEP' : 'MCQ';
+    if (rawType !== 'MCQ' && rawType !== 'TWO_STEP') {
+      errors.push(parseError(line, `Unsupported TYPE: ${rawType}.`));
+    }
 
     // Validate per-type constraints to surface malformed content early.
     if (!currentQuestion.prompt) {
@@ -88,14 +90,6 @@ export function parsePumpkinFile(
       }
     }
 
-    if (type === 'ORDER' && (!currentQuestion.items || currentQuestion.items.length < 2)) {
-      errors.push(parseError(line, 'ORDER requires ITEMS list with at least two entries.'));
-    }
-
-    if (type === 'FILL' && (!currentQuestion.blanks || currentQuestion.blanks.length === 0)) {
-      errors.push(parseError(line, 'FILL requires BLANK field.'));
-    }
-
     const question: Question = {
       id: `${currentConcept.id}-${currentConcept.questions.length + 1}`,
       conceptId: currentConcept.id,
@@ -108,8 +102,6 @@ export function parsePumpkinFile(
       misconception: currentQuestion.misconception,
       difficulty: currentQuestion.difficulty ?? 1,
       variantGroup: currentQuestion.variantGroup,
-      items: currentQuestion.items,
-      blanks: currentQuestion.blanks,
       reasonPrompt: currentQuestion.reasonPrompt,
       reasonOptions: currentQuestion.reasonOptions
     };
@@ -262,25 +254,6 @@ export function parsePumpkinFile(
 
     if (line.startsWith('VAR:')) {
       currentQuestion.variantGroup = line.replace('VAR:', '').trim();
-      continue;
-    }
-
-    if (line.startsWith('BLANK:')) {
-      currentQuestion.blanks = line
-        .replace('BLANK:', '')
-        .split(',')
-        .map((entry) => entry.trim())
-        .filter(Boolean);
-      continue;
-    }
-
-    if (line.startsWith('ITEMS:')) {
-      currentQuestion.items = [];
-      continue;
-    }
-
-    if (currentQuestion.items && /^\d+\)/.test(line)) {
-      currentQuestion.items.push(line.replace(/^\d+\)/, '').trim());
       continue;
     }
 

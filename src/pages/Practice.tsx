@@ -124,12 +124,7 @@ export default function Practice() {
       currentQuestion.type === 'TWO_STEP'
         ? currentQuestion.answer.split(',').map((part) => part.trim()).join('|') ===
           `${selected}|${reasonSelected ?? ''}`
-        : currentQuestion.type === 'ORDER'
-          ? currentQuestion.answer.split(',').map((part) => part.trim()).join(',') ===
-            selected.replace(/\s+/g, '').replace(/;/g, ',')
-          : currentQuestion.type === 'FILL'
-            ? currentQuestion.answer.trim().toLowerCase() === selected.trim().toLowerCase()
-            : currentQuestion.answer.trim().toLowerCase() === selected.trim().toLowerCase();
+        : currentQuestion.answer.trim().toLowerCase() === selected.trim().toLowerCase();
     const attempt: Attempt = {
       id: crypto.randomUUID(),
       questionId: currentQuestion.id,

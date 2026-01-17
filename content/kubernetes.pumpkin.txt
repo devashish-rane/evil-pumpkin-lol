@@ -3,99 +3,240 @@
 
 ##CONCEPT: Pods and deployments
 ##PREREQ:
-##SUMMARY: Pods are the smallest deployable unit; deployments manage rollout and replicas.
+##SUMMARY: Pods group containers that share network and storage; Deployments manage rollouts and replicas.
 
-Q: A Kubernetes Pod is:
-A) A virtual machine
-B) A group of one or more containers that share network and storage
-C) A cluster-wide load balancer
-D) A persistent volume
-ANS: B
-EXPL: Pods group containers with shared network namespace and storage.
-TAGS: pods
+Q: You need a rolling update with quick rollback for a stateless API. Which resource should you use?
+A) Deployment
+B) Job
+C) ConfigMap
+D) DaemonSet
+ANS: A
+EXPL: Deployments manage ReplicaSets and support controlled rollouts with easy rollback.
+TAGS: pods,deployments
 DIFF: 1
 ---
-Q: A Deployment primarily provides:
-A) Node autoscaling
-B) Declarative updates and replica management
-C) Network policy enforcement
-D) Storage provisioning
+Q: Your app has a main container and a log shipper that must share files and localhost. How should you run them?
+A) In separate namespaces
+B) In the same Pod
+C) On separate nodes only
+D) In a ConfigMap
 ANS: B
-EXPL: Deployments manage replica sets and rollouts.
-TAGS: deployments
+EXPL: Containers in the same Pod share the network namespace and volumes, making sidecars easy.
+TAGS: pods,sidecars
 DIFF: 2
 ---
+TYPE: TWO_STEP
+Q: A rollout stalls and old pods never scale down. What should you check first?
+A) Readiness probe failures on new pods
+B) ClusterIP Service type
+C) Node OS version
+D) Secret encoding
+REASON: Why would that block the rollout?
+REASON_A) Deployments wait for new pods to become ready before proceeding
+REASON_B) Services decide replica counts
+REASON_C) OS versions block ReplicaSets
+REASON_D) Secrets prevent scaling
+ANS: A,A
+EXPL: Rolling updates halt if new pods are not ready, so failed readiness probes keep old replicas running.
+TAGS: deployments,rollout
+DIFF: 3
 
-##CONCEPT: Services and networking
+##CONCEPT: Service discovery and ingress
 ##PREREQ: Pods and deployments
-##SUMMARY: Services provide stable networking for dynamic pod IPs.
+##SUMMARY: Services provide stable addresses; Ingress handles HTTP routing at the edge.
 
-Q: A ClusterIP Service exposes:
-A) A public IP on every node
-B) An internal virtual IP inside the cluster
-C) An external load balancer
-D) A DNS entry outside the cluster
-ANS: B
-EXPL: ClusterIP is internal-only by default.
-TAGS: networking
+Q: Pod IPs change on restart but your app needs a stable in-cluster address. What should you create?
+A) ClusterIP Service
+B) NodePort Service
+C) PersistentVolume
+D) Namespace
+ANS: A
+EXPL: A ClusterIP Service gives a stable virtual IP and DNS name for pods matching its selector.
+TAGS: networking,services
 DIFF: 1
 ---
-Q: Which resource routes HTTP traffic by hostname and path?
+Q: You need to route https://api.example.com/v1 to a service without exposing node ports. What should you use?
 A) ConfigMap
-B) Ingress
+B) Ingress with an Ingress controller
 C) DaemonSet
-D) Secret
+D) PodDisruptionBudget
 ANS: B
-EXPL: Ingress defines HTTP routing rules.
-TAGS: networking
+EXPL: Ingress rules route host and path traffic through an Ingress controller.
+TAGS: networking,ingress
 DIFF: 2
 ---
+TYPE: TWO_STEP
+Q: A Service shows zero endpoints and traffic fails. What is the most likely cause?
+A) Pod labels do not match the Service selector
+B) The cluster lacks a DNS addon
+C) The Service is of type ClusterIP
+D) The nodes are tainted
+REASON: Why would that stop endpoints from appearing?
+REASON_A) Endpoints are created only for pods matching the selector labels
+REASON_B) DNS controls endpoint selection
+REASON_C) ClusterIP hides endpoints
+REASON_D) Taints delete endpoints
+ANS: A,A
+EXPL: Services select pods by labels; if selectors do not match, no endpoints are created.
+TAGS: networking,services
+DIFF: 2
+
+##CONCEPT: Configuration and secrets
+##PREREQ: Service discovery and ingress
+##SUMMARY: ConfigMaps and Secrets inject configuration at runtime without rebuilding images.
+
+Q: You want to change log level without rebuilding the container image. What should you use?
+A) Hardcoded ENV in the Dockerfile
+B) ConfigMap mounted as env or files
+C) Node labels
+D) ReplicaSet annotations
+ANS: B
+EXPL: ConfigMaps let you inject and update configuration at runtime.
+TAGS: configuration
+DIFF: 1
+---
+Q: Where should you store a database password for a Pod?
+A) ConfigMap
+B) Secret
+C) Pod annotation
+D) Service
+ANS: B
+EXPL: Secrets are intended for sensitive data and integrate with env and volume mounts.
+TAGS: security,configuration
+DIFF: 1
+---
+TYPE: TWO_STEP
+Q: You updated a ConfigMap but the app still reads the old value from env vars. What should you do?
+A) Restart the Pods (rollout)
+B) Recreate the Service
+C) Delete the Namespace
+D) Change the Pod labels
+REASON: Why is that necessary?
+REASON_A) Environment variables are read only at container start
+REASON_B) Services cache ConfigMaps
+REASON_C) Namespaces block env updates
+REASON_D) Labels trigger env reloads
+ANS: A,A
+EXPL: Env vars are loaded at container startup, so pods must restart to pick up changes.
+TAGS: configuration,operations
+DIFF: 2
 
 ##CONCEPT: Scheduling and resources
-##PREREQ:
-##SUMMARY: Schedulers place pods based on resource requests, limits, and constraints.
+##PREREQ: Configuration and secrets
+##SUMMARY: Requests, limits, and placement rules control where pods run and how they behave under load.
 
-Q: CPU requests are used by the scheduler to:
-A) Encrypt traffic
-B) Decide pod placement
-C) Allocate storage classes
-D) Restart failed pods
-ANS: B
-EXPL: Requests inform scheduling decisions.
-TAGS: scheduling
+Q: Your pods are packed onto a node and contend for CPU. What setting tells the scheduler how much CPU to reserve?
+A) CPU requests
+B) CPU limits
+C) Node labels
+D) Pod annotations
+ANS: A
+EXPL: Requests inform the scheduler about required resources for placement decisions.
+TAGS: scheduling,resources
 DIFF: 2
 ---
-Q: A taint on a node does what?
-A) Prevents all pods from scheduling forever
-B) Repels pods unless they tolerate it
-C) Deletes existing pods immediately
-D) Disables the kubelet
-ANS: B
-EXPL: Taints repel pods without matching tolerations.
-TAGS: scheduling
-DIFF: 3
----
-
-##CONCEPT: Config and secrets
-##PREREQ: Pods and deployments
-##SUMMARY: ConfigMaps and Secrets inject configuration into workloads.
-
-Q: Secrets differ from ConfigMaps because:
-A) They are namespaced per node
-B) They are base64-encoded and intended for sensitive data
-C) They are stored outside etcd by default
-D) They cannot be mounted as files
-ANS: B
-EXPL: Secrets are base64-encoded and used for sensitive data.
-TAGS: configuration
+Q: GPU nodes are tainted "gpu=true:NoSchedule". How do you run a GPU workload there?
+A) Add a toleration for the taint
+B) Add a ServiceAccount
+C) Use a ConfigMap
+D) Set the Pod restart policy to Never
+ANS: A
+EXPL: Tolerations let pods schedule on tainted nodes.
+TAGS: scheduling,taints
 DIFF: 2
 ---
-Q: The most common way to update config without rebuilding an image is:
-A) Hardcode it in the container
-B) Use ConfigMaps and mount or env inject
-C) Use node labels
-D) Use pod annotations only
+TYPE: TWO_STEP
+Q: A Pod is repeatedly OOMKilled during traffic spikes. What should you change first?
+A) Increase the memory limit
+B) Decrease the CPU request
+C) Switch to a ClusterIP Service
+D) Disable liveness probes
+REASON: Why does that help?
+REASON_A) The kernel kills the container when it exceeds the memory limit
+REASON_B) CPU requests control memory usage
+REASON_C) Services cause OOMs
+REASON_D) Probes allocate memory
+ANS: A,A
+EXPL: OOMKilled indicates the container exceeded its memory limit, so raising the limit prevents immediate kills.
+TAGS: resources,stability
+DIFF: 2
+
+##CONCEPT: Storage and stateful workloads
+##PREREQ: Scheduling and resources
+##SUMMARY: PersistentVolumes, PVCs, and StatefulSets keep data and identities stable.
+
+Q: Your database pod must keep data across reschedules. What should you use?
+A) EmptyDir volume
+B) PersistentVolumeClaim
+C) ConfigMap
+D) NodePort Service
 ANS: B
-EXPL: ConfigMaps can be mounted or injected as env vars.
-TAGS: configuration
+EXPL: A PVC binds to a PersistentVolume that survives pod restarts.
+TAGS: storage
+DIFF: 1
+---
+Q: You need stable network identity and ordered rollouts for a database cluster. Which controller fits?
+A) Deployment
+B) StatefulSet
+C) Job
+D) DaemonSet
+ANS: B
+EXPL: StatefulSets provide stable pod names, storage, and ordered updates.
+TAGS: storage,stateful
+DIFF: 2
+---
+TYPE: TWO_STEP
+Q: A PVC stays in Pending because no volume is bound. What is the most likely issue?
+A) No matching StorageClass or provisioner is available
+B) The Service selector is wrong
+C) The Pod uses too many labels
+D) The Deployment strategy is Recreate
+REASON: Why would that block the PVC?
+REASON_A) Without a StorageClass or available PV, the claim cannot bind
+REASON_B) Services control volume binding
+REASON_C) Labels disable provisioning
+REASON_D) Strategy sets PV size
+ANS: A,A
+EXPL: PVCs bind only when a compatible StorageClass or PV exists for the requested storage.
+TAGS: storage,operations
+DIFF: 2
+
+##CONCEPT: Reliability and rollout hygiene
+##PREREQ: Storage and stateful workloads
+##SUMMARY: Probes, autoscaling, and disruption budgets keep services stable during change and failure.
+
+Q: You want traffic to route only to healthy pods. Which probe should you configure?
+A) Readiness probe
+B) Liveness probe
+C) Startup probe only
+D) Node condition
+ANS: A
+EXPL: Readiness gates traffic; pods are removed from Services until ready.
+TAGS: reliability,probes
+DIFF: 1
+---
+Q: CPU usage spikes every evening and you want replicas to scale automatically. What should you use?
+A) HorizontalPodAutoscaler
+B) PodDisruptionBudget
+C) ConfigMap
+D) CronJob
+ANS: A
+EXPL: HPA scales replica counts based on CPU or custom metrics.
+TAGS: autoscaling
+DIFF: 2
+---
+TYPE: TWO_STEP
+Q: During a node drain, too many pods are evicted at once. What should you add?
+A) PodDisruptionBudget
+B) Secret
+C) DaemonSet
+D) PersistentVolume
+REASON: Why does that help?
+REASON_A) PDBs limit how many replicas can be down during voluntary disruptions
+REASON_B) Secrets prevent eviction
+REASON_C) DaemonSets avoid disruption
+REASON_D) Volumes control evictions
+ANS: A,A
+EXPL: A PDB enforces minimum availability during voluntary disruptions like node drains.
+TAGS: reliability,operations
 DIFF: 2

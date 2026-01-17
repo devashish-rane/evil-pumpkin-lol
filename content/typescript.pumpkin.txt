@@ -1,101 +1,242 @@
 #TOPIC: TypeScript
 #DESC: Typed superset of JavaScript that adds static checking and tooling.
 
-##CONCEPT: Type inference
+##CONCEPT: Inference and API contracts
 ##PREREQ:
-##SUMMARY: TypeScript infers types from assignments and control flow.
+##SUMMARY: Type inference is powerful, but explicit annotations on public boundaries keep contracts stable.
 
-Q: Type inference means:
-A) All types must be explicitly written
-B) The compiler can determine types without annotations
-C) Types are removed at runtime
-D) Types are fetched from npm
-ANS: B
-EXPL: TypeScript infers types from values and flow.
-TAGS: types
-DIFF: 1
----
-Q: Which case benefits most from explicit annotation?
-A) Simple const value
-B) Public function API
-C) Local variable inside a function
-D) A literal string assignment
-ANS: B
-EXPL: Annotating public APIs clarifies intent for callers.
-TAGS: types
+Q: You export a function from a shared package. Which practice best prevents accidental API changes?
+A) Add an explicit return type
+B) Use any for all parameters
+C) Disable noImplicitAny
+D) Move the function to a class
+ANS: A
+EXPL: Explicit return types lock the public contract and force implementations to stay compatible.
+TAGS: inference,apis
 DIFF: 2
 ---
-
-##CONCEPT: Generics
-##PREREQ: Type inference
-##SUMMARY: Generics allow reusable types with type parameters.
-
-Q: A generic function helps:
-A) Remove all runtime checks
-B) Preserve type information across inputs and outputs
-C) Convert JS to TS automatically
-D) Avoid interfaces
+Q: You want a config literal to keep exact string types like "prod" and "dev". What should you use?
+A) const mode: string = "prod"
+B) const mode = "prod" as const
+C) let mode = "prod"
+D) var mode = "prod"
 ANS: B
-EXPL: Generics capture relationships between types.
-TAGS: generics
+EXPL: as const preserves literal types instead of widening to string.
+TAGS: inference,literals
 DIFF: 2
 ---
-Q: Which syntax defines a generic type parameter?
-A) function fn(T) {}
-B) function fn<T>() {}
-C) function fn[ T ]() {}
-D) function fn{T}() {}
-ANS: B
-EXPL: <T> declares a type parameter.
-TAGS: generics
-DIFF: 1
----
+TYPE: TWO_STEP
+Q: You refactor an exported function and accidentally change its return shape. What should you add?
+A) eslint-disable
+B) An explicit return type annotation
+C) Use any
+D) Remove types entirely
+REASON: Why does that help?
+REASON_A) The implementation must conform to the declared API
+REASON_B) It makes the function faster at runtime
+REASON_C) It removes compiler checks
+REASON_D) It disables inference entirely
+ANS: B,A
+EXPL: Declaring the return type keeps the API stable and flags incompatible refactors.
+TAGS: apis,inference
+DIFF: 3
 
 ##CONCEPT: Unions and narrowing
-##PREREQ:
-##SUMMARY: Unions model multiple types; narrowing refines them via checks.
+##PREREQ: Inference and API contracts
+##SUMMARY: Unions model multiple shapes; narrowing makes them safe to use.
 
-Q: A union type like string | number allows:
-A) Only string values
-B) Only number values
-C) Either string or number values
-D) No values
-ANS: C
-EXPL: Union types accept any member type.
-TAGS: unions
+Q: A function accepts string | number and needs to call toFixed. What should you do?
+A) Use value as is
+B) Check typeof value === "number"
+C) Cast to any
+D) Disable strict mode
+ANS: B
+EXPL: typeof checks narrow the union so number-only methods are safe.
+TAGS: unions,narrowing
 DIFF: 1
 ---
-Q: Type narrowing happens when:
-A) You cast everything to any
-B) The compiler recognizes a type guard
-C) You disable strict mode
-D) You use var instead of let
-ANS: B
-EXPL: Type guards narrow unions within a control flow path.
-TAGS: unions
+Q: You model API states with a status field. Which approach makes narrowing easiest?
+A) Use a discriminated union with a literal status field
+B) Use any for the payload
+C) Store status in a separate map
+D) Use a class hierarchy only
+ANS: A
+EXPL: Discriminated unions allow safe switching on a literal field like status.
+TAGS: unions,models
 DIFF: 2
 ---
+TYPE: TWO_STEP
+Q: You want the compiler to warn when a new union variant is not handled. What should you add?
+A) A default case that returns null
+B) An exhaustive check that assigns to never
+C) A try/catch block
+D) A runtime type assertion
+REASON: Why does that help?
+REASON_A) Assigning to never fails when the union has unhandled variants
+REASON_B) try/catch forces type narrowing
+REASON_C) Runtime assertions update types
+REASON_D) Default cases are required by TypeScript
+ANS: B,A
+EXPL: A never check creates a compile-time error when the union grows.
+TAGS: unions,safety
+DIFF: 3
 
-##CONCEPT: Structural typing
-##PREREQ:
-##SUMMARY: Types are compatible based on shape, not explicit declarations.
+##CONCEPT: Structural typing and interfaces
+##PREREQ: Unions and narrowing
+##SUMMARY: TypeScript checks shapes, so interfaces and extension guide how objects are accepted.
 
-Q: TypeScript uses which typing system?
-A) Nominal typing
-B) Structural typing
-C) Dynamic typing only
-D) Duck typing at runtime
+Q: A function expects { id: string }. Why can you pass a User object with extra fields?
+A) TypeScript uses nominal typing
+B) TypeScript uses structural typing
+C) Extra fields are erased at runtime
+D) It only works with classes
 ANS: B
-EXPL: Compatibility is based on structure, not named types.
-TAGS: types
+EXPL: Compatibility is based on shape, so any object with an id string is accepted.
+TAGS: interfaces,typing
+DIFF: 1
+---
+Q: You want Admin to include all User fields plus a role. How should you model it?
+A) type Admin = User & { role: string }
+B) type Admin = { role: string }
+C) type Admin = string
+D) type Admin = User | { role: string }
+ANS: A
+EXPL: An intersection (or interface extends) composes the base fields with new ones.
+TAGS: interfaces,composition
 DIFF: 2
 ---
-Q: Two interfaces are compatible when they:
-A) Have the same name
-B) Share the same property shapes
-C) Are declared in the same file
-D) Use the same extends clause
+TYPE: TWO_STEP
+Q: You want a function to accept { id: string } plus any extra metadata fields. Which type fits?
+A) { id: string }
+B) { id: string; [key: string]: unknown }
+C) Record<string, string>
+D) any
+REASON: Why does that solve the extra field errors on object literals?
+REASON_A) The index signature allows additional properties beyond id
+REASON_B) It removes the id requirement
+REASON_C) It forces all values to be strings
+REASON_D) It disables excess property checks entirely
+ANS: B,A
+EXPL: Index signatures allow extra fields while still enforcing required properties.
+TAGS: interfaces,typing
+DIFF: 3
+
+##CONCEPT: Generics and constraints
+##PREREQ: Structural typing and interfaces
+##SUMMARY: Generics preserve relationships between inputs and outputs, and constraints prevent invalid use.
+
+Q: You want a function that returns the same type it receives. What should you use?
+A) any
+B) A generic type parameter
+C) An enum
+D) A namespace
 ANS: B
-EXPL: Structural typing compares members by shape.
-TAGS: types
+EXPL: Generics preserve the input type so the output stays specific.
+TAGS: generics
+DIFF: 1
+---
+Q: You need to ensure a generic type has an id field. Which syntax is correct?
+A) function fn<T>(value: T & { id: string })
+B) function fn<T extends { id: string }>(value: T)
+C) function fn<T = { id: string }>(value: T)
+D) function fn<T>(value: { id: string })
+ANS: B
+EXPL: extends constraints require the presence of specific fields on T.
+TAGS: generics,constraints
 DIFF: 2
+---
+TYPE: TWO_STEP
+Q: You want a pluck helper that only accepts keys that exist on the object. Which signature is correct?
+A) function pluck<T, K extends keyof T>(obj: T, key: K): T[K]
+B) function pluck<T>(obj: T, key: string): any
+C) function pluck(obj: any, key: any): any
+D) function pluck<T>(obj: T, key: number): string
+REASON: Why is that safe?
+REASON_A) keyof T limits keys to actual properties on T
+REASON_B) string keys are always valid
+REASON_C) any prevents runtime errors
+REASON_D) number keys are faster
+ANS: A,A
+EXPL: keyof ensures only valid keys compile, and T[K] returns the correct value type.
+TAGS: generics,typing
+DIFF: 3
+
+##CONCEPT: Utility and mapped types
+##PREREQ: Generics and constraints
+##SUMMARY: Built-in utility types help remodel data for common API and UI flows.
+
+Q: A PATCH endpoint accepts any subset of fields. Which type should you use?
+A) Partial<T>
+B) Required<T>
+C) Readonly<T>
+D) NonNullable<T>
+ANS: A
+EXPL: Partial<T> makes every property optional for update payloads.
+TAGS: utility,apis
+DIFF: 1
+---
+Q: You need just id and name from a larger User type. What should you use?
+A) Pick<User, "id" | "name">
+B) Omit<User, "id" | "name">
+C) Record<User, string>
+D) Exclude<User, "id" | "name">
+ANS: A
+EXPL: Pick selects a subset of properties by key.
+TAGS: utility,types
+DIFF: 2
+---
+TYPE: TWO_STEP
+Q: You want a map of feature flags keyed by feature name. Which type fits best?
+A) Array<boolean>
+B) Record<Feature, boolean>
+C) Partial<Feature>
+D) Set<Feature>
+REASON: Why is that the right choice?
+REASON_A) Record maps each key to a value type
+REASON_B) Partial makes keys optional but does not map to values
+REASON_C) Set stores only keys, not values
+REASON_D) Array indexing is safer for strings
+ANS: B,A
+EXPL: Record creates an object whose keys are the feature names and values are booleans.
+TAGS: utility,models
+DIFF: 2
+
+##CONCEPT: Runtime safety and validation
+##PREREQ: Utility and mapped types
+##SUMMARY: Runtime data must be validated; type guards bridge runtime checks to static types.
+
+Q: You parse JSON from an external API. Which type should you use before validation?
+A) any
+B) unknown
+C) never
+D) void
+ANS: B
+EXPL: unknown forces you to validate before using the value safely.
+TAGS: runtime,safety
+DIFF: 2
+---
+Q: You create a type guard function to narrow a value to User. What should it return?
+A) boolean
+B) value is User
+C) User
+D) asserts value
+ANS: B
+EXPL: A return type of value is User tells the compiler how to narrow.
+TAGS: runtime,guards
+DIFF: 2
+---
+TYPE: TWO_STEP
+Q: You want a function that throws if a value is not a User and narrows afterward. Which return type fits?
+A) void
+B) asserts value is User
+C) User | null
+D) boolean
+REASON: Why does that help?
+REASON_A) Assertion functions narrow the type when they complete without throwing
+REASON_B) void functions always narrow
+REASON_C) null indicates success
+REASON_D) boolean is required for narrowing
+ANS: B,A
+EXPL: Assertion functions provide compile-time narrowing after runtime checks succeed.
+TAGS: runtime,guards
+DIFF: 3

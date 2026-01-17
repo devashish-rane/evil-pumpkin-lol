@@ -12,6 +12,7 @@ import postgresRaw from '../../content/postgres.pumpkin.txt?raw';
 import kafkaRaw from '../../content/kafka.pumpkin.txt?raw';
 import kubernetesRaw from '../../content/kubernetes.pumpkin.txt?raw';
 import dockerRaw from '../../content/docker.pumpkin.txt?raw';
+import httpRaw from '../../content/http.pumpkin.txt?raw';
 import typescriptRaw from '../../content/typescript.pumpkin.txt?raw';
 import systemDesignRaw from '../../content/system-design.pumpkin.txt?raw';
 
@@ -67,6 +68,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       { source: 'kafka', raw: kafkaRaw },
       { source: 'kubernetes', raw: kubernetesRaw },
       { source: 'docker', raw: dockerRaw },
+      { source: 'http', raw: httpRaw },
       { source: 'typescript', raw: typescriptRaw },
       { source: 'system-design', raw: systemDesignRaw }
     ];

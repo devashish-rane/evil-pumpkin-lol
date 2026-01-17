@@ -201,6 +201,34 @@ body {
   }
 }
 
+.anki-card {
+  transition: transform 420ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    opacity 420ms ease,
+    box-shadow 420ms ease,
+    border-color 420ms ease;
+  will-change: transform, opacity;
+}
+
+.anki-card-stack {
+  transition: none;
+  transform: translateY(8px) scale(0.98);
+  opacity: 0.9;
+}
+
+.anki-swipe-left {
+  transform: translateX(-260px) rotate(-10deg) scale(0.97);
+  opacity: 0;
+  border-color: rgba(244, 63, 94, 0.85);
+  box-shadow: 0 30px 70px rgba(244, 63, 94, 0.28);
+}
+
+.anki-swipe-right {
+  transform: translateX(260px) rotate(10deg) scale(0.97);
+  opacity: 0;
+  border-color: rgba(16, 185, 129, 0.85);
+  box-shadow: 0 30px 70px rgba(16, 185, 129, 0.28);
+}
+
 @keyframes confetti-fall {
   0% {
     transform: translateY(-10px) rotate(0deg);

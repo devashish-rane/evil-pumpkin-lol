@@ -3,99 +3,204 @@
 
 ##CONCEPT: Images and layers
 ##PREREQ:
-##SUMMARY: Docker images are built in layers that can be cached and shared.
+##SUMMARY: Image layers cache build steps and impact speed, size, and security.
 
-Q: Docker image layers are:
-A) Rebuilt on every run
-B) Immutable and cached between builds
-C) Stored only in memory
-D) Created only for base images
+Q: Your Docker build is slow because small code changes invalidate the cache. What should you do?
+A) Put COPY . . before installing dependencies
+B) Copy dependency files first, then install, then copy the app
+C) Disable the build cache entirely
+D) Use a larger base image
 ANS: B
-EXPL: Layers are immutable and cached to speed up builds.
-TAGS: images
-DIFF: 1
----
-Q: A smaller image size is best achieved by:
-A) Adding more RUN steps
-B) Using a multi-stage build
-C) Disabling the build cache
-D) Using root for all steps
-ANS: B
-EXPL: Multi-stage builds drop build-time dependencies.
-TAGS: images
+EXPL: Ordering stable layers first preserves cache for dependencies and speeds rebuilds.
+TAGS: images,build
 DIFF: 2
+---
+Q: You need a smaller production image. Which approach works best?
+A) Add more RUN steps
+B) Use a multi-stage build
+C) Disable compression
+D) Build everything as root
+ANS: B
+EXPL: Multi-stage builds keep only runtime artifacts and drop build dependencies.
+TAGS: images,build
+DIFF: 2
+---
+TYPE: TWO_STEP
+Q: You must keep build secrets out of the final image. What should you do?
+A) Put secrets in ENV
+B) Use a multi-stage build and copy only artifacts
+C) Store secrets in the image label
+D) Hardcode secrets in Dockerfile
+REASON: Why is that safer?
+REASON_A) Only the final stage is shipped, so secrets in earlier stages are not included
+REASON_B) Labels are encrypted by default
+REASON_C) ENV values are hidden at runtime
+REASON_D) Hardcoding prevents leaking
+ANS: B,A
+EXPL: Multi-stage builds keep secrets out of the final image, reducing exposure risk.
+TAGS: security,build
+DIFF: 3
 ---
 
 ##CONCEPT: Containers and runtime
-##PREREQ:
-##SUMMARY: Containers are isolated processes sharing the host kernel.
+##PREREQ: Images and layers
+##SUMMARY: Containers are isolated processes; keep them focused and restartable.
 
-Q: Containers differ from VMs because they:
-A) Have their own kernel
-B) Share the host kernel
-C) Require a hypervisor for every process
-D) Cannot be stopped
+Q: You have a web app and a worker. What is the recommended deployment pattern?
+A) Run both in one container
+B) Use two containers and orchestrate them
+C) Run only the worker
+D) Use a VM for each process
 ANS: B
-EXPL: Containers are OS-level isolation sharing the host kernel.
-TAGS: runtime
-DIFF: 1
+EXPL: One process per container keeps scaling and failure isolation clean.
+TAGS: runtime,architecture
+DIFF: 2
 ---
-Q: The default process in a container is defined by:
-A) EXPOSE
-B) CMD or ENTRYPOINT
-C) WORKDIR
+Q: Your app crashes occasionally and you want it to restart automatically. What should you set?
+A) CMD
+B) restart policy
+C) EXPOSE
 D) VOLUME
 ANS: B
-EXPL: CMD and ENTRYPOINT define the container's default process.
-TAGS: runtime
-DIFF: 2
+EXPL: Restart policies tell Docker to relaunch containers when they exit unexpectedly.
+TAGS: runtime,ops
+DIFF: 1
+---
+TYPE: TWO_STEP
+Q: You need to run a one-off debugging command in a running container. What should you use?
+A) docker exec
+B) docker build
+C) docker save
+D) docker network create
+REASON: Why is that correct?
+REASON_A) exec runs a process inside the existing container without rebuilding
+REASON_B) build is for images only
+REASON_C) save creates a tarball for images
+REASON_D) network create is unrelated
+ANS: A,A
+EXPL: docker exec is the safest way to run diagnostics in a live container.
+TAGS: runtime,debugging
+DIFF: 1
 ---
 
 ##CONCEPT: Networking
 ##PREREQ: Containers and runtime
-##SUMMARY: Docker networking connects containers with bridges, ports, and overlays.
+##SUMMARY: Docker networking connects containers and exposes services safely.
 
-Q: The default Docker network driver is:
-A) host
-B) bridge
-C) overlay
-D) macvlan
+Q: You need to expose port 8080 from a container to the host. What should you do?
+A) docker run --expose 8080
+B) docker run -p 8080:8080
+C) docker run --network none
+D) docker run --privileged
 ANS: B
-EXPL: bridge is the default network driver.
+EXPL: -p maps container ports to the host for inbound access.
 TAGS: networking
 DIFF: 1
 ---
-Q: Publishing a container port does what?
-A) Exposes it on the host interface
-B) Creates a new image layer
-C) Encrypts container traffic
-D) Changes the PID namespace
-ANS: A
-EXPL: Port publishing maps container ports to host ports.
+Q: Two containers should talk by name. What network should you use?
+A) Default bridge only
+B) User-defined bridge network
+C) Host network
+D) None network
+ANS: B
+EXPL: User-defined bridge networks provide built-in DNS by container name.
 TAGS: networking
 DIFF: 2
 ---
-
-##CONCEPT: Volumes and storage
-##PREREQ:
-##SUMMARY: Volumes persist data outside the container filesystem.
-
-Q: Docker volumes are preferred over bind mounts when:
-A) You need the host path visible
-B) You want Docker-managed persistent storage
-C) You need to edit files directly
-D) You want no data persistence
-ANS: B
-EXPL: Volumes are managed by Docker and decouple storage from host paths.
-TAGS: storage
+TYPE: TWO_STEP
+Q: You want an internal-only service that is not reachable from the host. What should you do?
+A) Publish the port and use firewall rules
+B) Attach to a bridge network and do not publish ports
+C) Use host networking
+D) Run on port 80
+REASON: Why is that safer?
+REASON_A) Without published ports, the service is only reachable inside the network
+REASON_B) Host networking isolates the container
+REASON_C) Port 80 is always internal
+REASON_D) Firewalls are optional
+ANS: B,A
+EXPL: Not publishing ports keeps services private to the Docker network.
+TAGS: networking,security
 DIFF: 2
 ---
-Q: Removing a container automatically removes:
-A) All named volumes
-B) Anonymous volumes only
-C) No volumes by default
-D) The Docker image
-ANS: C
-EXPL: Volumes persist unless explicitly removed.
+
+##CONCEPT: Storage and persistence
+##PREREQ: Networking
+##SUMMARY: Volumes and mounts control data durability across container lifecycles.
+
+Q: You want database data to survive container restarts. What should you use?
+A) A bind mount to /tmp
+B) A named volume
+C) An anonymous volume only
+D) No volume at all
+ANS: B
+EXPL: Named volumes are managed by Docker and persist across restarts.
 TAGS: storage
+DIFF: 1
+---
+Q: You need to edit code on your host and see changes inside the container. What should you use?
+A) Named volume
+B) Bind mount
+C) Image label
+D) Container commit
+ANS: B
+EXPL: Bind mounts sync files directly from the host for fast dev workflows.
+TAGS: storage,dev
+DIFF: 1
+---
+TYPE: TWO_STEP
+Q: You need shared data between two containers and easy backups. What should you pick?
+A) Bind mount to a random path
+B) Named volume
+C) tmpfs mount
+D) No volume
+REASON: Why is that best?
+REASON_A) Named volumes are stable, portable, and easy to back up
+REASON_B) tmpfs persists after container stop
+REASON_C) Bind mounts are always portable across hosts
+REASON_D) No volume is safest for shared data
+ANS: B,A
+EXPL: Named volumes are Docker-managed, durable, and easy to inspect and back up.
+TAGS: storage,backup
+DIFF: 2
+---
+
+##CONCEPT: Build and delivery workflow
+##PREREQ: Storage and persistence
+##SUMMARY: Clean build hygiene keeps images fast, predictable, and secure.
+
+Q: What should you add to reduce build context and speed up builds?
+A) .dockerignore
+B) .gitignore
+C) package-lock only
+D) docker-compose
+ANS: A
+EXPL: .dockerignore prevents unnecessary files from being sent to the Docker daemon.
+TAGS: build
+DIFF: 1
+---
+Q: You need to verify a container is healthy before routing traffic. What should you add?
+A) HEALTHCHECK in the Dockerfile
+B) ENV HEALTH=true
+C) EXPOSE 80
+D) VOLUME /health
+ANS: A
+EXPL: HEALTHCHECK defines a command to determine container health status.
+TAGS: ops
+DIFF: 2
+---
+TYPE: TWO_STEP
+Q: You want reproducible builds for production. What should you do?
+A) Use latest tags only
+B) Pin base image by digest
+C) Disable caching
+D) Build on every deploy without tags
+REASON: Why does that help?
+REASON_A) Digests lock the exact base image version used
+REASON_B) latest is always deterministic
+REASON_C) Disabling cache ensures stable base image
+REASON_D) Tags never change
+ANS: B,A
+EXPL: Pinning by digest prevents accidental base image drift across builds.
+TAGS: build,security
 DIFF: 2

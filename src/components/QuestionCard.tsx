@@ -23,15 +23,7 @@ export default function QuestionCard({
       const expected = question.answer.split(',').map((part) => part.trim());
       return expected[0] === selected && expected[1] === reasonSelected;
     }
-    if (question.type === 'ORDER') {
-      const expected = question.answer.split(',').map((part) => part.trim()).join(',');
-      const actual = selected.replace(/\s+/g, '').replace(/;/g, ',');
-      return expected === actual;
-    }
-    if (question.type === 'FILL') {
-      return question.answer.trim().toLowerCase() === selected.trim().toLowerCase();
-    }
-    return question.answer === selected || question.answer === selected.trim();
+    return question.answer.trim().toLowerCase() === selected.trim().toLowerCase();
   }, [question, reasonSelected, selected, submitted]);
 
   const handleSubmit = () => {
@@ -56,33 +48,6 @@ export default function QuestionCard({
           </button>
         </div>
       </div>
-
-      {question.type === 'ORDER' && question.items && (
-        <div className="mt-4 space-y-4 text-sm text-ink-700">
-          <ol className="space-y-2">
-            {question.items.map((item, index) => (
-              <li key={item} className="rounded-2xl border border-ink-200 bg-ink-100 px-4 py-3">
-                {index + 1}. {item}
-              </li>
-            ))}
-          </ol>
-          <input
-            value={selected}
-            onChange={(event) => setSelected(event.target.value)}
-            placeholder="Enter order (e.g., 1,2,3,4)"
-            className="w-full rounded-2xl border border-ink-200 px-4 py-3 text-sm"
-          />
-        </div>
-      )}
-
-      {question.type === 'FILL' && (
-        <input
-          value={selected}
-          onChange={(event) => setSelected(event.target.value)}
-          placeholder="Type your answer"
-          className="mt-4 w-full rounded-2xl border border-ink-200 px-4 py-3 text-sm"
-        />
-      )}
 
       {(question.type === 'MCQ' || question.type === 'TWO_STEP') && question.options && (
         <div className="mt-4 grid gap-2">

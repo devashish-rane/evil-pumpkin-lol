@@ -1,101 +1,242 @@
 #TOPIC: System Design
 #DESC: Principles for building reliable, scalable, and observable systems.
 
-##CONCEPT: Load balancing
+##CONCEPT: Requirements and sizing
 ##PREREQ:
-##SUMMARY: Load balancers distribute traffic across healthy backends.
+##SUMMARY: Clear SLOs, scale, and constraints drive architecture choices.
 
-Q: A layer 7 load balancer routes based on:
-A) IP addresses only
-B) HTTP host and path
-C) MAC addresses
-D) CPU usage only
-ANS: B
-EXPL: Layer 7 balancers can route on HTTP attributes.
-TAGS: scalability
-DIFF: 2
----
-Q: Health checks are used to:
-A) Increase cache hit rate
-B) Remove unhealthy instances from rotation
-C) Speed up DNS propagation
-D) Encrypt traffic
-ANS: B
-EXPL: Health checks keep bad instances out of the pool.
-TAGS: reliability
+Q: You are designing a notification service. What number should you estimate first to guide capacity planning?
+A) Peak requests per second
+B) Number of tables in the database
+C) Team size
+D) Average payload size only
+ANS: A
+EXPL: Peak QPS determines load, scaling needs, and capacity planning assumptions.
+TAGS: requirements,capacity
 DIFF: 1
 ---
-
-##CONCEPT: Caching
-##PREREQ:
-##SUMMARY: Caches reduce latency and backend load for repeated reads.
-
-Q: A cache-aside strategy means:
-A) The cache writes directly to the DB
-B) The app reads from cache, then falls back to DB and fills cache
-C) The cache is the only source of truth
-D) The cache is prewarmed only
+Q: A product needs 99.9% uptime. What architecture choice does that push you toward?
+A) Single instance with nightly backups
+B) Redundant instances with failover
+C) No monitoring
+D) Batch-only processing
 ANS: B
-EXPL: Cache-aside loads data into cache on a miss.
-TAGS: caching
+EXPL: 99.9% uptime requires redundancy to avoid single points of failure.
+TAGS: requirements,reliability
 DIFF: 2
 ---
-Q: Cache invalidation is hard because:
-A) It never affects correctness
-B) Data can change outside the cache
-C) It only applies to images
-D) It is solved by TTLs alone
-ANS: B
-EXPL: Updates must invalidate stale entries to prevent inconsistencies.
-TAGS: caching
+TYPE: TWO_STEP
+Q: Your SLO requires p99 latency under 200 ms. Where should heavy analytics run?
+A) In the request path
+B) Asynchronous background jobs
+C) Inside the load balancer
+D) On every client
+REASON: Why is that the best choice?
+REASON_A) Async jobs keep the hot path within the latency budget
+REASON_B) Analytics always reduce latency
+REASON_C) Load balancers compute analytics fastest
+REASON_D) Clients are always faster than servers
+ANS: B,A
+EXPL: Offloading analytics keeps the request path fast and meets p99 targets.
+TAGS: requirements,latency
 DIFF: 2
----
 
-##CONCEPT: Data consistency
-##PREREQ:
-##SUMMARY: Consistency models trade off freshness for availability.
+##CONCEPT: Data partitioning and scaling
+##PREREQ: Requirements and sizing
+##SUMMARY: Sharding and partitioning spread load and control hot spots.
 
-Q: Eventual consistency means:
-A) Reads always see the latest write
-B) Reads may be stale temporarily
-C) Writes are rejected
-D) All replicas are locked
-ANS: B
-EXPL: Eventual consistency allows temporary staleness.
-TAGS: consistency
-DIFF: 2
----
-Q: A strongly consistent system typically requires:
-A) Quorum or coordinated writes
-B) No replication
-C) UDP only
-D) Clients to retry forever
+Q: Your user table reaches billions of rows and a single node cannot keep up. What is the next step?
+A) Shard by user_id across nodes
+B) Turn off indexes
+C) Use only in-memory storage
+D) Store data in logs
 ANS: A
-EXPL: Strong consistency often needs coordinated writes or quorum.
-TAGS: consistency
+EXPL: Sharding distributes data and load across multiple nodes.
+TAGS: partitioning,scaling
+DIFF: 2
+---
+Q: You need even key distribution across shards and easy rebalancing. Which technique fits?
+A) Round robin at the client only
+B) Consistent hashing
+C) Manual hot key routing
+D) Random write failures
+ANS: B
+EXPL: Consistent hashing reduces reshuffling when adding or removing nodes.
+TAGS: partitioning,hashing
+DIFF: 2
+---
+TYPE: TWO_STEP
+Q: A metrics table grows by billions of rows and queries are mostly by time range. What partitioning helps most?
+A) Time-based partitions
+B) Random partitions
+C) Country-based partitions
+D) Single table only
+REASON: Why does that help?
+REASON_A) Time partitions keep recent data small and speed range scans
+REASON_B) Random partitions optimize joins
+REASON_C) Country partitions reduce time-based IO
+REASON_D) Single tables always scan faster
+ANS: A,A
+EXPL: Time partitions limit the amount of data scanned for range queries and simplify retention.
+TAGS: partitioning,storage
+DIFF: 3
+
+##CONCEPT: Caching and performance
+##PREREQ: Data partitioning and scaling
+##SUMMARY: Caches cut latency and backend load when used with clear invalidation rules.
+
+Q: Read traffic is 90% and the database is overloaded. What caching pattern fits best?
+A) Write-back cache only
+B) Cache-aside
+C) No caching
+D) Always precompute everything
+ANS: B
+EXPL: Cache-aside is simple and effective for read-heavy traffic with controlled invalidation.
+TAGS: caching,performance
+DIFF: 2
+---
+Q: A hot key causes many cache misses to hit the database at once. What should you add?
+A) Request coalescing or lock around cache fill
+B) Disable caching
+C) Reduce TTL to zero
+D) Add more indexes
+ANS: A
+EXPL: Coalescing prevents thundering herd by letting one request fill the cache.
+TAGS: caching,reliability
 DIFF: 3
 ---
+TYPE: TWO_STEP
+Q: You need fresh data after every write but still want cache reads. What is the best approach?
+A) Cache only and ignore writes
+B) Update or invalidate the cache on writes
+C) Increase TTL to one day
+D) Use client-side caches only
+REASON: Why does that work?
+REASON_A) Keeping cache in sync on writes prevents stale reads
+REASON_B) Longer TTLs remove staleness
+REASON_C) Client caches always stay fresh
+REASON_D) Ignoring writes avoids errors
+ANS: B,A
+EXPL: Write-through or explicit invalidation keeps cache consistent with the source of truth.
+TAGS: caching,consistency
+DIFF: 3
 
-##CONCEPT: Observability
-##PREREQ:
-##SUMMARY: Metrics, logs, and traces help understand system behavior.
+##CONCEPT: Async processing and queues
+##PREREQ: Caching and performance
+##SUMMARY: Queues smooth spikes and move slow work off the request path.
 
-Q: A high-cardinality label can:
-A) Improve query performance
-B) Increase metrics storage cost
-C) Reduce alert noise
-D) Disable logging
+Q: You must send emails after signup without delaying the response. What should you use?
+A) A synchronous SMTP call in the request
+B) A background worker reading from a queue
+C) A cron job once per day
+D) A larger load balancer
 ANS: B
-EXPL: High cardinality increases storage and query cost.
-TAGS: observability
+EXPL: Queues allow asynchronous work without blocking user requests.
+TAGS: async,queues
+DIFF: 1
+---
+Q: Traffic spikes 10x during promotions and the database is overwhelmed. What helps most?
+A) A queue to buffer writes
+B) Remove indexes
+C) Disable caching
+D) Increase logging only
+ANS: A
+EXPL: Queues absorb bursts and let workers process at a stable rate.
+TAGS: async,scaling
 DIFF: 2
 ---
-Q: Tracing is best for:
-A) Tracking request flow across services
-B) Counting daily active users
-C) Storing binary blobs
-D) Rotating logs
+TYPE: TWO_STEP
+Q: Payment processing retries can create duplicate charges. What should you add?
+A) A random delay
+B) An idempotency key
+C) A bigger queue
+D) A daily batch job
+REASON: Why does that prevent duplicates?
+REASON_A) Idempotency keys let the server detect and ignore repeated requests
+REASON_B) Random delay removes duplicates
+REASON_C) Queues guarantee exactly-once delivery
+REASON_D) Batches never retry
+ANS: B,A
+EXPL: Idempotency keys let repeated requests map to the same outcome.
+TAGS: reliability,queues
+DIFF: 3
+
+##CONCEPT: Consistency and coordination
+##PREREQ: Async processing and queues
+##SUMMARY: Distributed systems trade consistency, availability, and latency with careful coordination.
+
+Q: You need read-after-write consistency from replicas. What strategy helps?
+A) Read from the primary or use quorum reads
+B) Use random replicas only
+C) Disable replication
+D) Cache everything forever
 ANS: A
-EXPL: Traces show end-to-end request paths.
-TAGS: observability
-DIFF: 1
+EXPL: Reading from the primary or a quorum reduces staleness.
+TAGS: consistency,replication
+DIFF: 2
+---
+Q: You must update two services and allow partial failure recovery. What pattern fits?
+A) Two-phase commit everywhere
+B) Saga with compensating actions
+C) Single global lock
+D) Ignore failures
+ANS: B
+EXPL: Sagas allow stepwise changes with compensating actions across services.
+TAGS: consistency,transactions
+DIFF: 3
+---
+TYPE: TWO_STEP
+Q: During a network partition, your system chooses availability over strong consistency. What should clients expect?
+A) Temporary stale reads or conflicts
+B) Immediate strong consistency
+C) No responses at all
+D) Perfect ordering of updates
+REASON: Why is that the tradeoff?
+REASON_A) CAP tradeoffs allow availability at the cost of consistency
+REASON_B) Availability requires strict consistency
+REASON_C) Partitions only affect writes
+REASON_D) Conflicts cannot happen in distributed systems
+ANS: A,A
+EXPL: Prioritizing availability during partitions can lead to stale reads or conflicts.
+TAGS: consistency,cap
+DIFF: 3
+
+##CONCEPT: Reliability and observability
+##PREREQ: Consistency and coordination
+##SUMMARY: Resilience patterns and visibility prevent cascading failures and speed recovery.
+
+Q: A downstream service is flaky and causes cascading failures. What pattern should you add?
+A) Circuit breaker
+B) Random retries without delay
+C) Larger payloads
+D) Synchronous fan-out
+ANS: A
+EXPL: Circuit breakers stop repeated failures from cascading through the system.
+TAGS: reliability,resilience
+DIFF: 2
+---
+Q: You need to trace a slow request across multiple services. What tool is best?
+A) Distributed tracing with spans
+B) A single error log line
+C) A dashboard with no tags
+D) Cache warmers
+ANS: A
+EXPL: Tracing links requests across services to reveal bottlenecks.
+TAGS: observability,tracing
+DIFF: 2
+---
+TYPE: TWO_STEP
+Q: A retry storm is hammering your API after errors. What should you change?
+A) Add exponential backoff with jitter
+B) Retry immediately in a loop
+C) Disable all retries
+D) Increase payload size
+REASON: Why does that help?
+REASON_A) Backoff with jitter spreads retries and reduces synchronized load
+REASON_B) Immediate retries are more reliable
+REASON_C) Disabling retries always improves success rates
+REASON_D) Larger payloads reduce requests
+ANS: A,A
+EXPL: Backoff and jitter reduce coordinated retries and help systems recover.
+TAGS: reliability,backoff
+DIFF: 3

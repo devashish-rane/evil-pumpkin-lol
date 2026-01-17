@@ -97,15 +97,6 @@ export default function Topic() {
         `${selected}|${reasonSelected ?? ''}`
       );
     }
-    if (question.type === 'ORDER') {
-      return (
-        question.answer.split(',').map((part) => part.trim()).join(',') ===
-        selected.replace(/\s+/g, '').replace(/;/g, ',')
-      );
-    }
-    if (question.type === 'FILL') {
-      return question.answer.trim().toLowerCase() === selected.trim().toLowerCase();
-    }
     return question.answer.trim().toLowerCase() === selected.trim().toLowerCase();
   };
 
@@ -127,10 +118,16 @@ export default function Topic() {
               Review
             </Link>
             <Link
-              to={`/practice?topic=${topic.id}&mode=learn`}
+              to={`/topic/${topic.id}/notes`}
               className="rounded-full bg-saffron-500 px-4 py-2 text-sm font-semibold text-ink-900"
             >
-              Learn
+              Notes
+            </Link>
+            <Link
+              to={`/topic/${topic.id}/anki`}
+              className="rounded-full border border-ink-200 bg-white px-4 py-2 text-sm font-semibold text-ink-700 transition hover:bg-ink-50"
+            >
+              Anki
             </Link>
           </div>
         </div>

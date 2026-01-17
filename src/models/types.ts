@@ -1,6 +1,6 @@
 export type MasteryLevel = 'Exposed' | 'Fragile' | 'Stable' | 'InterviewReady';
 
-export type QuestionType = 'MCQ' | 'TWO_STEP' | 'ORDER' | 'FILL';
+export type QuestionType = 'MCQ' | 'TWO_STEP';
 
 export interface Topic {
   id: string;
@@ -29,8 +29,6 @@ export interface Question {
   misconception?: string;
   difficulty: number;
   variantGroup?: string;
-  items?: string[];
-  blanks?: string[];
   reasonPrompt?: string;
   reasonOptions?: string[];
 }

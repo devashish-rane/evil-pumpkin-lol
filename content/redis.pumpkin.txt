@@ -1,998 +1,402 @@
 #TOPIC: Redis
 #DESC: In-memory data store used for caching, queues, and real-time infrastructure.
 
-##CONCEPT: Single-threaded event loop
+##CONCEPT: Event loop and command execution
 ##PREREQ:
-##SUMMARY: Redis processes most commands in a single thread to reduce locks and context switching, relying on fast I/O and networking.
+##SUMMARY: Redis processes commands on a single event loop, so long operations block everyone.
 
-Q: Redis is single-threaded primarily to:
-A) Reduce memory usage
-B) Avoid locks and context switching
-C) Improve disk durability
-D) Support sharding automatically
-ANS: B
-EXPL: Single-threading minimizes lock contention and context switching; Redis scales with I/O multiplexing and sharding/replication patterns.
-TAGS: architecture,performance
-MISCONCEPT: “single-threaded = slow”
-DIFF: 2
-VAR: single_thread_core
----
-Q: Redis achieves high throughput because it:
-A) Uses per-key locks on every request
-B) Blocks on disk writes
-C) Uses an event loop with non-blocking I/O
-D) Forces every client to use transactions
-ANS: C
-EXPL: The event loop uses non-blocking I/O to keep the single thread busy with useful work.
-TAGS: architecture,io
-MISCONCEPT: “needs threads to scale”
-DIFF: 2
-VAR: event_loop_io
----
-TYPE: FILL
-Q: Redis avoids heavy lock contention by relying on a single ______ for command execution.
-BLANK: thread
-ANS: thread
-EXPL: A single command thread reduces shared-state locking; Redis leans on I/O multiplexing to remain responsive.
-TAGS: architecture
-MISCONCEPT: “threading is always required”
-DIFF: 1
-VAR: single_thread_fill
----
-TYPE: TWO_STEP
-Q: Redis latency spikes with low CPU often indicate:
-A) Disk saturation
-B) Slow clients/backpressure
-C) Too many keys
-D) Immediate eviction
-REASON: The event loop can stall when output buffers grow, even without high CPU.
-REASON_A) Output buffers only affect memory
-REASON_B) Slow clients stop reads, delaying the loop
-REASON_C) Keys are locked per client
-REASON_D) CPU is the only bottleneck
-ANS: B,B
-EXPL: Slow clients create backpressure; the event loop can stall waiting on I/O despite low CPU usage.
-TAGS: latency,production
-MISCONCEPT: “low CPU means no bottleneck”
-DIFF: 3
-VAR: latency_backpressure
----
-TYPE: MCQ
-Q: Which command flag in Redis is most likely to block the event loop when used heavily?
+Q: You need to iterate a large keyspace in production without blocking the server. Which command should you use?
 A) KEYS
-B) GET
-C) SET
-D) PING
-ANS: A
-EXPL: KEYS scans the full keyspace and can block the single thread; SCAN is safer for production.
+B) SCAN
+C) DUMP
+D) FLUSHALL
+ANS: B
+EXPL: SCAN iterates incrementally, avoiding long blocking operations.
 TAGS: ops,performance
-MISCONCEPT: “KEYS is fine in production”
-DIFF: 3
-VAR: keys_blocking
----
-TYPE: ORDER
-Q: Order the steps of a typical command flow in Redis.
-ITEMS:
-1) Socket read event arrives
-2) Command is parsed
-3) Command executes in the event loop
-4) Response is written to the client
-ANS: 1,2,3,4
-EXPL: The event loop reads, parses, executes, and writes responses.
-TAGS: architecture
-MISCONCEPT: “execution happens before parsing”
 DIFF: 2
-VAR: command_flow
 ---
-
-##CONCEPT: Networking & pipelining
-##PREREQ: Single-threaded event loop
-##SUMMARY: Redis is efficient when clients batch commands and avoid round trips; pipelining keeps the loop busy.
-
-Q: Pipelining in Redis primarily reduces:
-A) Memory usage
-B) Network round-trip latency
-C) Disk I/O
-D) Key expiration
+Q: You must read a huge set with millions of members while keeping latency low. What should you use?
+A) SMEMBERS
+B) SSCAN with small batches
+C) SUNIONSTORE
+D) SPOP
 ANS: B
-EXPL: Pipelining batches commands to reduce round-trip cost.
-TAGS: networking,latency
-MISCONCEPT: “pipelining changes command semantics”
+EXPL: SSCAN paginates over large sets to avoid blocking the event loop.
+TAGS: performance,sets
 DIFF: 2
-VAR: pipeline_latency
----
-TYPE: FILL
-Q: A client that sends one command per RTT benefits from ______ to keep throughput high.
-BLANK: pipelining
-ANS: pipelining
-EXPL: Pipelining sends multiple commands before waiting for replies.
-TAGS: networking
-MISCONCEPT: “more connections is enough”
-DIFF: 1
-VAR: pipeline_fill
----
-Q: TCP keepalive in Redis helps detect:
-A) Slow queries
-B) Dead peers
-C) Key expiration
-D) Cluster slots
-ANS: B
-EXPL: Keepalive detects dead or unreachable clients sooner.
-TAGS: networking
-MISCONCEPT: “keepalive improves throughput”
-DIFF: 2
-VAR: tcp_keepalive
 ---
 TYPE: TWO_STEP
-Q: A client floods Redis with large replies and then stops reading. What happens first?
+Q: A client receives large replies and then stops reading. What happens first?
 A) Redis evicts keys
-B) Client output buffers grow
-C) Redis crashes immediately
-D) Redis switches to multi-threading
-REASON: The event loop must buffer replies for slow clients.
-REASON_A) Replies are discarded
-REASON_B) Output buffers accumulate and stall
-REASON_C) Threads auto-scale
-REASON_D) Eviction policy handles buffers
-ANS: B,B
-EXPL: Slow clients cause output buffers to grow, stalling the loop and increasing latency.
-TAGS: networking,latency
-MISCONCEPT: “Redis handles slow clients automatically”
+B) Client output buffers grow and latency spikes
+C) Redis restarts automatically
+D) Cluster resharding begins
+REASON: Why does that happen?
+REASON_A) The event loop must buffer replies for slow clients
+REASON_B) Replies are discarded immediately
+REASON_C) Slow clients speed up the loop
+REASON_D) Replication disables buffers
+ANS: B,A
+EXPL: Slow clients create backpressure; output buffers grow and stall the event loop.
+TAGS: performance,networking
 DIFF: 3
-VAR: slow_client_buffer
----
-Q: Which command helps you monitor latency sources in real time?
-A) MONITOR
-B) LATENCY DOCTOR
-C) PUBLISH
-D) INFO REPLICATION
-ANS: B
-EXPL: LATENCY DOCTOR provides diagnostics on latency sources.
-TAGS: ops,latency
-MISCONCEPT: “MONITOR is safe in prod”
-DIFF: 3
-VAR: latency_doctor
----
-TYPE: ORDER
-Q: Order the networking optimizations for a high-throughput Redis client.
-ITEMS:
-1) Enable TCP keepalive
-2) Pipeline batches of commands
-3) Reuse connections
-4) Measure RTT and buffer sizes
-ANS: 3,2,1,4
-EXPL: Connection reuse + pipelining are primary; keepalive and measurement follow.
-TAGS: networking
-MISCONCEPT: “keepalive is the core optimization”
-DIFF: 2
-VAR: networking_order
----
 
-##CONCEPT: Persistence (RDB & AOF)
-##PREREQ: Single-threaded event loop
-##SUMMARY: Redis persistence uses RDB snapshots and AOF logs; each has tradeoffs in latency and durability.
+##CONCEPT: Data modeling and structures
+##PREREQ: Event loop and command execution
+##SUMMARY: Choosing the right structure keeps operations fast and predictable.
 
-Q: RDB snapshots are typically:
-A) Append-only logs
-B) Full point-in-time dumps
-C) Disabled by default and cannot be enabled
-D) Faster to recover than AOF in all cases
-ANS: B
-EXPL: RDB is a point-in-time snapshot of the dataset.
-TAGS: persistence
-MISCONCEPT: “RDB is incremental”
-DIFF: 2
-VAR: rdb_snapshot
----
-Q: AOF persistence improves durability by:
-A) Taking periodic full dumps only
-B) Logging every write command
-C) Storing only reads
-D) Disabling fsync
-ANS: B
-EXPL: AOF logs writes so data can be replayed.
-TAGS: persistence
-MISCONCEPT: “AOF only logs some commands”
-DIFF: 2
-VAR: aof_basics
----
-TYPE: FILL
-Q: The safest AOF fsync setting for durability is ______.
-BLANK: always
-ANS: always
-EXPL: fsync always offers strongest durability, at the cost of latency.
-TAGS: persistence
-MISCONCEPT: “fsync never is safe”
-DIFF: 2
-VAR: aof_fsync
----
-TYPE: ORDER
-Q: Order the steps of an RDB snapshot.
-ITEMS:
-1) Fork a child process
-2) Child writes the snapshot to disk
-3) Parent continues serving clients
-4) Child exits and replaces the RDB file
-ANS: 1,3,2,4
-EXPL: The child process writes while the parent serves, then swaps the RDB file.
-TAGS: persistence
-MISCONCEPT: “Redis blocks entirely during snapshot”
-DIFF: 3
-VAR: rdb_order
----
-TYPE: TWO_STEP
-Q: AOF rewrite happens to:
-A) Reduce file size
-B) Increase latency
-C) Disable persistence
-D) Drop durability
-REASON: The rewritten file contains the minimal command set to rebuild state.
-REASON_A) It stores keys in binary
-REASON_B) It compacts history into minimal writes
-REASON_C) It disables fsync
-REASON_D) It adds extra commands
-ANS: A,B
-EXPL: Rewrite compacts the AOF log to a minimal set of commands.
-TAGS: persistence
-MISCONCEPT: “rewrite removes persistence”
-DIFF: 3
-VAR: aof_rewrite
----
-Q: When using both RDB and AOF, Redis will:
-A) Ignore RDB entirely
-B) Prefer AOF on startup
-C) Prefer RDB on startup
-D) Require manual selection each time
-ANS: B
-EXPL: Redis loads the AOF if it is enabled because it is typically more complete.
-TAGS: persistence
-MISCONCEPT: “RDB always wins”
-DIFF: 2
-VAR: rdb_aof_priority
----
-
-##CONCEPT: Core data structures
-##PREREQ: Single-threaded event loop
-##SUMMARY: Redis data structures offer specialized performance characteristics for different access patterns.
-
-Q: Redis lists are optimized for:
-A) O(1) random access
-B) Fast push/pop at ends
-C) Full-text search
-D) Automatic expiration only
-ANS: B
-EXPL: Lists are linked lists or quicklists optimized for pushes/pops.
-TAGS: data-structures
-MISCONCEPT: “lists are arrays”
-DIFF: 2
-VAR: list_push_pop
----
-Q: Redis hashes are best for:
-A) Storing bit flags
-B) Small object-like fields
-C) Time series only
-D) Full-text indexes
-ANS: B
-EXPL: Hashes store field/value pairs efficiently.
-TAGS: data-structures
-MISCONCEPT: “use hashes for arrays”
-DIFF: 2
-VAR: hash_objects
----
-TYPE: FILL
-Q: Sorted sets use a ______ to order members by score.
-BLANK: score
-ANS: score
-EXPL: Sorted sets are ordered by score with members as unique strings.
-TAGS: data-structures
-MISCONCEPT: “order is insertion-based”
-DIFF: 1
-VAR: zset_score
----
-TYPE: ORDER
-Q: Order operations for a typical leaderboard update.
-ITEMS:
-1) ZADD user score
-2) ZREVRANGE for top N
-3) ZSCORE to fetch user rank
-4) ZINCRBY on activity
-ANS: 4,1,2,3
-EXPL: Increment, persist, list top, then check a single user.
-TAGS: data-structures
-MISCONCEPT: “read before write is required”
-DIFF: 3
-VAR: leaderboard_order
----
-TYPE: TWO_STEP
-Q: Which structure suits unique visitor counts with approximate memory?
-A) HyperLogLog
-B) Set
+Q: You store user profiles with many fields and update one field at a time. Which structure fits best?
+A) String
+B) Hash
 C) List
-D) Hash
-REASON: It uses probabilistic counting with fixed memory.
-REASON_A) It stores full values
-REASON_B) It estimates cardinality
-REASON_C) It stores ordered ranges
-REASON_D) It stores key/value pairs
-ANS: A,B
-EXPL: HyperLogLog is probabilistic and memory-efficient.
-TAGS: data-structures
-MISCONCEPT: “HyperLogLog is exact”
-DIFF: 3
-VAR: hll_unique
----
-Q: Bitmaps in Redis are implemented as:
-A) A dedicated datatype
-B) Strings with bit operations
-C) Lists of bits
-D) Sorted sets
+D) HyperLogLog
 ANS: B
-EXPL: Bit operations operate on strings.
-TAGS: data-structures
-MISCONCEPT: “bitmaps are a separate type”
-DIFF: 2
-VAR: bitmap_string
----
-
-##CONCEPT: Eviction vs Expiration
-##PREREQ: Single-threaded event loop
-##SUMMARY: Expiration uses TTL per key; eviction occurs only under maxmemory pressure based on policy.
-
-Q: Redis will evict keys automatically when memory increases.
-A) True
-B) False
-C) Only on replicas
-D) Only on Windows
-ANS: B
-EXPL: Eviction depends on maxmemory and policy; without maxmemory, Redis may error on writes.
-TAGS: memory
-MISCONCEPT: “Redis always evicts”
-DIFF: 2
-VAR: eviction_basics
----
-Q: Expiration is:
-A) Based on maxmemory
-B) Based on per-key TTL
-C) Based on CPU usage
-D) Based on replication lag
-ANS: B
-EXPL: Expiration is driven by key TTLs.
-TAGS: memory
-MISCONCEPT: “expiration == eviction”
+EXPL: Hashes store field-value pairs efficiently for object-like data.
+TAGS: data-modeling
 DIFF: 1
-VAR: expiration_ttl
 ---
-TYPE: FILL
-Q: Redis only evicts keys when ______ is set.
-BLANK: maxmemory
-ANS: maxmemory
-EXPL: Without maxmemory, Redis will not evict by policy.
-TAGS: memory
-MISCONCEPT: “eviction is automatic”
-DIFF: 1
-VAR: eviction_fill
----
-TYPE: ORDER
-Q: Order the events when maxmemory is reached and a write occurs.
-ITEMS:
-1) Write command received
-2) Eviction policy evaluated
-3) Keys evicted (if policy allows)
-4) Write succeeds or errors
-ANS: 1,2,3,4
-EXPL: Redis checks policy, evicts if allowed, then proceeds or errors.
-TAGS: memory
-MISCONCEPT: “eviction happens after writes”
+Q: You need a leaderboard that returns the top 10 users by score quickly. Which structure should you use?
+A) Set
+B) Sorted set
+C) List
+D) Stream
+ANS: B
+EXPL: Sorted sets order members by score and support fast range queries.
+TAGS: data-modeling,ranking
 DIFF: 2
-VAR: eviction_order
 ---
 TYPE: TWO_STEP
-Q: Which policy evicts keys with an expiration first?
+Q: You need approximate unique visitor counts with fixed memory usage. What should you use?
+A) Set
+B) HyperLogLog
+C) Bitmap
+D) List
+REASON: Why is that the right choice?
+REASON_A) It uses probabilistic counting with fixed memory
+REASON_B) It stores every value exactly
+REASON_C) It sorts values by score
+REASON_D) It keeps a time-ordered log
+ANS: B,A
+EXPL: HyperLogLog provides approximate cardinality with tiny fixed memory.
+TAGS: data-modeling,analytics
+DIFF: 3
+
+##CONCEPT: Expiration and eviction
+##PREREQ: Data modeling and structures
+##SUMMARY: TTL expiration is per key; eviction happens only under memory pressure.
+
+Q: You want cache entries to expire 10 minutes after write. Which command pattern fits?
+A) SET key value EX 600
+B) SET key value NX
+C) PERSIST key
+D) MIGRATE key
+ANS: A
+EXPL: EX sets a TTL at write time so the key expires automatically.
+TAGS: ttl,caching
+DIFF: 1
+---
+Q: Writes fail with "OOM command not allowed" even though many keys have TTLs. What is the likely cause?
+A) maxmemory-policy is noeviction
+B) Replication is disabled
+C) AOF is off
+D) Cluster slots are full
+ANS: A
+EXPL: With noeviction, Redis refuses writes instead of evicting keys when memory is full.
+TAGS: memory,eviction
+DIFF: 2
+---
+TYPE: TWO_STEP
+Q: You want eviction to target only keys that already have TTLs. Which policy should you use?
 A) allkeys-lru
 B) volatile-lru
 C) allkeys-random
 D) noeviction
-REASON: It targets only keys with TTL.
-REASON_A) It targets all keys
-REASON_B) It targets only TTL keys
-REASON_C) It evicts randomly
-REASON_D) It disables eviction
-ANS: B,B
-EXPL: volatile-* policies apply to keys with TTLs.
-TAGS: memory
-MISCONCEPT: “volatile means all keys”
-DIFF: 3
-VAR: volatile_policy
----
-Q: Lazy expiration means:
-A) Keys expire only when accessed
-B) Keys are removed immediately
-C) Redis is blocked by expiration
-D) TTLs are ignored
-ANS: A
-EXPL: Redis deletes expired keys when accessed; active expiry runs in the background.
-TAGS: memory
-MISCONCEPT: “expiration is synchronous”
-DIFF: 2
-VAR: lazy_expire
----
-
-##CONCEPT: Replication & high availability
-##PREREQ: Persistence (RDB & AOF)
-##SUMMARY: Redis replication streams commands to replicas; HA is often managed via Sentinel or Cluster.
-
-Q: Redis replication is:
-A) Multi-master by default
-B) Asynchronous by default
-C) Synchronous for every write
-D) Only snapshot-based
-ANS: B
-EXPL: Replication is asynchronous by default; replicas can lag.
-TAGS: replication
-MISCONCEPT: “replicas are always consistent”
-DIFF: 2
-VAR: repl_async
----
-Q: Sentinel provides:
-A) Client-side sharding only
-B) Failover orchestration
-C) Query caching
-D) Data compression
-ANS: B
-EXPL: Sentinel monitors and performs failover for Redis masters.
-TAGS: ha
-MISCONCEPT: “Sentinel is a cache”
-DIFF: 2
-VAR: sentinel_failover
----
-TYPE: FILL
-Q: The replication backlog helps replicas that reconnect avoid a full ______.
-BLANK: resync
-ANS: resync
-EXPL: The backlog allows partial resynchronization.
-TAGS: replication
-MISCONCEPT: “backlog stores all history”
-DIFF: 2
-VAR: repl_backlog
----
-TYPE: ORDER
-Q: Order a typical Sentinel failover sequence.
-ITEMS:
-1) Sentinel detects master down
-2) Sentinel elects a leader
-3) Replica promoted to master
-4) Clients are reconfigured
-ANS: 1,2,3,4
-EXPL: Sentinel detects, elects, promotes, then reconfigures clients.
-TAGS: ha
-MISCONCEPT: “clients auto-detect without Sentinel”
-DIFF: 3
-VAR: sentinel_order
----
-TYPE: TWO_STEP
-Q: Replication lag is dangerous because:
-A) Reads may be stale
-B) Writes are blocked
-C) TTLs are disabled
-D) Memory is freed immediately
-REASON: Replicas apply commands after the master, not before.
-REASON_A) Replicas rewrite commands
-REASON_B) Replicas apply asynchronously
-REASON_C) TTLs are removed
-REASON_D) Memory usage decreases
-ANS: A,B
-EXPL: Reads from replicas can be stale due to async replication.
-TAGS: replication
-MISCONCEPT: “replicas are always real-time”
-DIFF: 3
-VAR: repl_lag
----
-Q: Redis Cluster primarily provides:
-A) Manual sharding
-B) Automatic sharding and failover
-C) Full SQL queries
-D) Strong consistency
-ANS: B
-EXPL: Redis Cluster provides automatic sharding and failover but is not strongly consistent.
-TAGS: cluster
-MISCONCEPT: “cluster means strong consistency”
-DIFF: 2
-VAR: cluster_sharding
----
-
-##CONCEPT: Transactions & Lua
-##PREREQ: Single-threaded event loop
-##SUMMARY: Redis transactions use MULTI/EXEC for atomicity, while Lua scripts execute atomically in the event loop.
-
-Q: MULTI/EXEC provides:
-A) Isolation from other clients
-B) Atomic execution of queued commands
-C) Automatic retries
-D) Multi-threading
-ANS: B
-EXPL: Commands queued in MULTI execute atomically upon EXEC.
-TAGS: transactions
-MISCONCEPT: “MULTI is fully isolated”
-DIFF: 2
-VAR: multi_atomic
----
-Q: WATCH is used to:
-A) Speed up reads
-B) Abort a transaction if keys change
-C) Persist data
-D) Enable clustering
-ANS: B
-EXPL: WATCH marks keys so the transaction aborts if they change.
-TAGS: transactions
-MISCONCEPT: “WATCH locks keys”
-DIFF: 2
-VAR: watch_abort
----
-TYPE: FILL
-Q: Lua scripts in Redis run ______ with respect to other commands.
-BLANK: atomically
-ANS: atomically
-EXPL: Lua scripts run atomically in the single-threaded event loop.
-TAGS: scripting
-MISCONCEPT: “Lua is parallel”
-DIFF: 2
-VAR: lua_atomic
----
-TYPE: ORDER
-Q: Order a typical optimistic transaction flow.
-ITEMS:
-1) WATCH keys
-2) MULTI
-3) Queue commands
-4) EXEC
-ANS: 1,2,3,4
-EXPL: WATCH first, then MULTI, queue, and EXEC.
-TAGS: transactions
-MISCONCEPT: “MULTI before WATCH”
-DIFF: 2
-VAR: transaction_order
----
-TYPE: TWO_STEP
-Q: Long-running Lua scripts are risky because:
-A) They block the event loop
-B) They spawn threads
-C) They persist data
-D) They sync replicas
-REASON: Redis cannot process other commands while the script runs.
-REASON_A) Scripts run in background
-REASON_B) Scripts block the single thread
-REASON_C) Scripts run on replicas only
-REASON_D) Scripts are async
-ANS: A,B
-EXPL: Lua scripts block the single event loop until completion.
-TAGS: scripting
-MISCONCEPT: “Lua is async”
-DIFF: 3
-VAR: lua_blocking
----
-Q: Redis transactions guarantee:
-A) Rollback on error
-B) Atomic execution, no rollback
-C) Serializable isolation
-D) Blocking locks
-ANS: B
-EXPL: Redis transactions are atomic but do not rollback on command errors.
-TAGS: transactions
-MISCONCEPT: “transactions rollback”
-DIFF: 3
-VAR: transactions_no_rollback
----
-
-##CONCEPT: Pub/Sub & Streams
-##PREREQ: Single-threaded event loop
-##SUMMARY: Pub/Sub is ephemeral broadcasting; Streams persist entries for consumer groups.
-
-Q: Pub/Sub messages are:
-A) Stored until acknowledged
-B) Delivered to all current subscribers only
-C) Stored in RDB by default
-D) Replayed automatically
-ANS: B
-EXPL: Pub/Sub is fire-and-forget; subscribers must be online.
-TAGS: messaging
-MISCONCEPT: “Pub/Sub stores messages”
-DIFF: 2
-VAR: pubsub_ephemeral
----
-Q: Redis Streams provide:
-A) Persistent log with consumer groups
-B) Only ephemeral broadcasts
-C) Automatic data compression
-D) A lock manager
-ANS: A
-EXPL: Streams store entries and support consumer groups.
-TAGS: streams
-MISCONCEPT: “streams are pub/sub”
-DIFF: 2
-VAR: streams_persistent
----
-TYPE: FILL
-Q: Streams entries are addressed by an ______ composed of timestamp and sequence.
-BLANK: id
-ANS: id
-EXPL: Stream IDs include a millisecond time component and sequence number.
-TAGS: streams
-MISCONCEPT: “IDs are random”
-DIFF: 2
-VAR: stream_id
----
-TYPE: ORDER
-Q: Order a consumer group flow.
-ITEMS:
-1) XGROUP CREATE
-2) XREADGROUP consumes entries
-3) Consumer ACKs with XACK
-4) XDEL optionally trims
-ANS: 1,2,3,4
-EXPL: Create group, read, ack, then trim if needed.
-TAGS: streams
-MISCONCEPT: “ACK happens before read”
-DIFF: 2
-VAR: stream_order
----
-TYPE: TWO_STEP
-Q: Why are pending entries lists (PEL) important?
-A) They track unacked messages
-B) They delete old entries
-C) They compress the stream
-D) They balance masters
-REASON: The PEL lets you claim or inspect unacked work.
-REASON_A) It tracks acknowledgments
-REASON_B) It trims entries
-REASON_C) It changes retention
-REASON_D) It replicates entries
-ANS: A,A
-EXPL: Pending lists track unacknowledged messages for recovery.
-TAGS: streams
-MISCONCEPT: “PEL stores all messages”
-DIFF: 3
-VAR: pel_tracking
----
-Q: Pub/Sub is best for:
-A) Durable queues
-B) Real-time fan-out with no replay
-C) Exactly-once processing
-D) Stream retention
-ANS: B
-EXPL: Pub/Sub is ephemeral, ideal for live fan-out.
-TAGS: messaging
-MISCONCEPT: “Pub/Sub is durable”
-DIFF: 2
-VAR: pubsub_best
----
-
-##CONCEPT: Memory optimization
-##PREREQ: Eviction vs Expiration
-##SUMMARY: Redis offers memory optimizations via encodings, maxmemory policies, and data modeling.
-
-Q: Redis uses memory-efficient encodings for:
-A) Every key regardless of size
-B) Small hashes, lists, sets
-C) Only sorted sets
-D) Only strings
-ANS: B
-EXPL: Small collections can use ziplist/listpack encodings for efficiency.
-TAGS: memory
-MISCONCEPT: “encodings are only for strings”
-DIFF: 2
-VAR: encoding_small
----
-Q: maxmemory-policy controls:
-A) Which keys expire by TTL
-B) Which keys evict under memory pressure
-C) Client timeouts
-D) Replication offset
-ANS: B
-EXPL: The policy determines eviction behavior.
-TAGS: memory
-MISCONCEPT: “policy controls TTLs”
-DIFF: 2
-VAR: maxmemory_policy
----
-TYPE: FILL
-Q: The latency of large keys can be reduced by ______ them into smaller chunks.
-BLANK: sharding
-ANS: sharding
-EXPL: Splitting large keys reduces single-operation latency.
-TAGS: memory,performance
-MISCONCEPT: “large keys are fine”
-DIFF: 3
-VAR: large_key_shard
----
-TYPE: ORDER
-Q: Order steps to reduce memory pressure.
-ITEMS:
-1) Measure memory usage with INFO
-2) Identify big keys with MEMORY USAGE
-3) Apply eviction policy or refactor data
-4) Monitor hit rate
-ANS: 1,2,3,4
-EXPL: Measure, identify, act, then monitor.
-TAGS: memory
-MISCONCEPT: “act before measuring”
-DIFF: 2
-VAR: memory_order
----
-TYPE: TWO_STEP
-Q: Why are large keys risky?
-A) They cause latency spikes
-B) They compress better
-C) They improve cache hit rate
-D) They are always evicted first
-REASON: Single-threaded execution means big ops block the loop.
-REASON_A) Large operations block the loop
-REASON_B) Compression is always on
-REASON_C) Keys are prioritized
-REASON_D) Eviction is deterministic
-ANS: A,A
-EXPL: Large keys produce long operations that block the single thread.
-TAGS: memory,performance
-MISCONCEPT: “large keys are harmless”
-DIFF: 3
-VAR: large_key_latency
----
-Q: The memory doctor helps identify:
-A) Pub/Sub issues
-B) Memory fragmentation and spikes
-C) Cluster topology
-D) Replication errors
-ANS: B
-EXPL: MEMORY DOCTOR highlights fragmentation and related risks.
-TAGS: memory
-MISCONCEPT: “memory doctor is for networking”
-DIFF: 2
-VAR: memory_doctor
----
-
-##CONCEPT: Security & access
-##PREREQ: Networking & pipelining
-##SUMMARY: Redis security depends on proper ACLs, protected mode, and network boundaries.
-
-Q: Protected mode is enabled to:
-A) Disable persistence
-B) Prevent accidental exposure
-C) Force TLS
-D) Reduce latency
-ANS: B
-EXPL: Protected mode blocks unsafe connections by default.
-TAGS: security
-MISCONCEPT: “protected mode is optional”
-DIFF: 2
-VAR: protected_mode
----
-Q: ACLs in Redis allow:
-A) Key-level access control and command restrictions
-B) Only password authentication
-C) Automatic encryption
-D) Cluster sharding
-ANS: A
-EXPL: ACLs define users with command and key patterns.
-TAGS: security
-MISCONCEPT: “Redis has only one password”
-DIFF: 2
-VAR: acl_access
----
-TYPE: FILL
-Q: Always bind Redis to a private ______ when running outside a trusted network.
-BLANK: interface
-ANS: interface
-EXPL: Binding to a private interface reduces exposure.
-TAGS: security
-MISCONCEPT: “bind 0.0.0.0 is safe”
-DIFF: 2
-VAR: bind_interface
----
-TYPE: ORDER
-Q: Order the hardening steps for a new Redis instance.
-ITEMS:
-1) Bind to a private interface
-2) Enable ACL users
-3) Set requirepass or ACL passwords
-4) Place behind a firewall
-ANS: 1,3,2,4
-EXPL: Bind and credentials first, then ACL users and firewall.
-TAGS: security
-MISCONCEPT: “firewall alone is enough”
-DIFF: 3
-VAR: harden_order
----
-TYPE: TWO_STEP
-Q: Which action most directly prevents open access from the internet?
-A) Disabling persistence
-B) Binding to localhost/private interface
-C) Setting maxmemory
-D) Enabling Lua
-REASON: It prevents external connections from reaching Redis.
-REASON_A) It limits network exposure
-REASON_B) It increases durability
-REASON_C) It increases memory
-REASON_D) It increases CPU
+REASON: Why does that match the requirement?
+REASON_A) volatile policies consider only keys with TTLs
+REASON_B) allkeys policies ignore TTLs entirely
+REASON_C) noeviction evicts only TTL keys
+REASON_D) random eviction targets expired keys first
 ANS: B,A
-EXPL: Binding to a private interface blocks public access.
-TAGS: security
-MISCONCEPT: “persistence controls access”
+EXPL: volatile-lru evicts among keys with TTLs, preserving non-expiring data.
+TAGS: memory,eviction
 DIFF: 3
-VAR: bind_prevent
----
-Q: TLS in Redis ensures:
-A) Commands are faster
-B) Data is encrypted in transit
-C) No ACLs needed
-D) Automatic replication
-ANS: B
-EXPL: TLS encrypts data over the network.
-TAGS: security
-MISCONCEPT: “TLS replaces ACLs”
-DIFF: 2
-VAR: tls_encrypt
----
 
-##CONCEPT: Operational diagnostics
-##PREREQ: Persistence (RDB & AOF), Networking & pipelining
-##SUMMARY: Operational tools reveal latency, slow commands, and memory hot spots.
+##CONCEPT: Persistence and durability
+##PREREQ: Expiration and eviction
+##SUMMARY: RDB snapshots and AOF logs trade off speed, size, and data loss.
 
-Q: SLOWLOG tracks:
-A) Key evictions only
-B) Slow commands based on threshold
-C) Cluster slots
-D) ACL changes
-ANS: B
-EXPL: SLOWLOG records commands that exceed the slowlog threshold.
-TAGS: ops
-MISCONCEPT: “slowlog is only for queries”
-DIFF: 2
-VAR: slowlog
----
-Q: INFO MEMORY provides:
-A) Memory stats and fragmentation
-B) ACL user lists
-C) Stream entries
-D) Cluster topology
+Q: You can tolerate losing the last few minutes of data but want fast restarts. Which persistence should you choose?
+A) RDB snapshots
+B) AOF fsync always
+C) No persistence
+D) Cluster only
 ANS: A
-EXPL: INFO MEMORY exposes memory usage and fragmentation.
+EXPL: RDB snapshots are compact and restore quickly, with some data loss between snapshots.
+TAGS: persistence
+DIFF: 2
+---
+Q: You want to minimize data loss to about one second while keeping performance reasonable. Which AOF fsync setting fits?
+A) always
+B) everysec
+C) no
+D) offload
+ANS: B
+EXPL: everysec is the common durability and performance balance and limits loss to about one second.
+TAGS: persistence,durability
+DIFF: 2
+---
+TYPE: TWO_STEP
+Q: Your AOF file grows very large. What should you do to compact it?
+A) Disable AOF permanently
+B) Trigger an AOF rewrite
+C) Delete the file and restart
+D) Switch to RDB only without backup
+REASON: Why does that help?
+REASON_A) The rewrite compacts history into minimal commands
+REASON_B) It removes all data
+REASON_C) It doubles file size
+REASON_D) It disables persistence entirely
+ANS: B,A
+EXPL: AOF rewrite rebuilds the log with the minimal commands needed for the current dataset.
+TAGS: persistence,operations
+DIFF: 3
+
+##CONCEPT: Replication and failover
+##PREREQ: Persistence and durability
+##SUMMARY: Replication is async by default; Sentinel automates failover.
+
+Q: Users reading from a replica see stale data after writes. Why does this happen?
+A) Replication is asynchronous by default
+B) Replicas are always ahead of the master
+C) TTLs are ignored on replicas
+D) AOF is disabled
+ANS: A
+EXPL: Replicas apply updates after the master, so reads can be stale.
+TAGS: replication
+DIFF: 2
+---
+Q: You need automatic failover for a primary node. What should you deploy?
+A) Redis Sentinel
+B) AOF rewrite
+C) MONITOR
+D) Slowlog
+ANS: A
+EXPL: Sentinel monitors masters and coordinates automated failover.
+TAGS: ha,replication
+DIFF: 2
+---
+TYPE: TWO_STEP
+Q: You want to reduce the risk of losing recent writes during failover. What should you use?
+A) WAIT for replica acknowledgments
+B) Disable replication
+C) Increase maxmemory
+D) Use KEYS more often
+REASON: Why does that help?
+REASON_A) WAIT blocks until replicas confirm they received the write
+REASON_B) Disabling replication improves durability
+REASON_C) maxmemory controls replication lag
+REASON_D) KEYS forces replicas to sync
+ANS: A,A
+EXPL: WAIT ensures writes are replicated to a quorum before continuing, reducing loss on failover.
+TAGS: replication,durability
+DIFF: 3
+
+##CONCEPT: Cluster sharding and multi-key operations
+##PREREQ: Replication and failover
+##SUMMARY: Redis Cluster partitions keys into hash slots and limits multi-key atomicity.
+
+Q: Your dataset no longer fits on a single node. Which Redis mode provides horizontal sharding?
+A) Redis Cluster
+B) Redis Sentinel
+C) RDB only
+D) MONITOR
+ANS: A
+EXPL: Redis Cluster shards data across nodes using hash slots.
+TAGS: cluster,scaling
+DIFF: 2
+---
+Q: Multi-key commands fail with CROSSSLOT. What is the correct fix?
+A) Disable clustering
+B) Use hash tags to force keys into the same slot
+C) Increase maxmemory
+D) Use KEYS before every command
+ANS: B
+EXPL: Hash tags inside {} ensure related keys map to the same slot.
+TAGS: cluster,modeling
+DIFF: 3
+---
+TYPE: TWO_STEP
+Q: A Lua script touches multiple keys and fails in Cluster. Why?
+A) Lua scripts are disabled
+B) Keys are in different hash slots
+C) AOF is off
+D) Replicas are read-only
+REASON: Why does that cause a failure?
+REASON_A) Cluster requires all keys in a script to be in the same hash slot
+REASON_B) Lua scripts run only on replicas
+REASON_C) AOF controls slot mapping
+REASON_D) Scripts cannot read keys
+ANS: B,A
+EXPL: Cluster enforces single-slot atomicity, so scripts cannot span multiple hash slots.
+TAGS: cluster,scripting
+DIFF: 3
+
+##CONCEPT: Atomicity and Lua scripts
+##PREREQ: Cluster sharding and multi-key operations
+##SUMMARY: MULTI/EXEC and Lua scripts provide atomic updates when used carefully.
+
+Q: You must atomically check a balance and decrement it. What is the safest approach?
+A) Two separate GET and SET commands
+B) A Lua script that reads and updates in one call
+C) A client-side lock only
+D) A Pub/Sub message
+ANS: B
+EXPL: Lua scripts run atomically on the server, ensuring the check and update happen together.
+TAGS: atomicity,scripting
+DIFF: 2
+---
+Q: You want an optimistic transaction that aborts if a key changes. What should you use?
+A) WATCH with MULTI/EXEC
+B) PING
+C) SETNX only
+D) KEYS
+ANS: A
+EXPL: WATCH marks keys so the transaction aborts if they change before EXEC.
+TAGS: atomicity,transactions
+DIFF: 2
+---
+TYPE: TWO_STEP
+Q: A long-running Lua script causes latency spikes for all clients. Why is that?
+A) Scripts run in a separate background thread
+B) Scripts block the single event loop
+C) Scripts are read-only and slow
+D) Scripts force replication to stop
+REASON: Why does that impact other commands?
+REASON_A) Redis processes commands sequentially on one thread
+REASON_B) Scripts disable persistence
+REASON_C) Replicas cannot apply scripts
+REASON_D) Lua bypasses the event loop
+ANS: B,A
+EXPL: Lua scripts run on the main thread, so long scripts block all other commands.
+TAGS: atomicity,performance
+DIFF: 3
+
+##CONCEPT: Performance and latency
+##PREREQ: Atomicity and Lua scripts
+##SUMMARY: Network round trips and large keys are common latency killers.
+
+Q: Your app sends many small commands with high network RTT. What should you use?
+A) Pipelining
+B) MONITOR
+C) KEYS
+D) FLUSHALL
+ANS: A
+EXPL: Pipelining batches commands to reduce round trips and latency.
+TAGS: performance,networking
+DIFF: 2
+---
+Q: You want to identify commands that exceed a latency threshold. Which tool should you use?
+A) SLOWLOG
+B) INFO REPLICATION
+C) DBSIZE
+D) CLUSTER NODES
+ANS: A
+EXPL: SLOWLOG records commands that exceed the configured slowlog threshold.
+TAGS: ops,performance
+DIFF: 2
+---
+TYPE: TWO_STEP
+Q: A single key stores a huge list and operations stall the server. What should you do?
+A) Split the data into smaller keys or shards
+B) Increase client output buffers
+C) Use KEYS more often
+D) Disable persistence
+REASON: Why does that help?
+REASON_A) Large operations block the single thread; smaller keys reduce blocking work
+REASON_B) Buffers solve large key latency
+REASON_C) KEYS speeds up large lists
+REASON_D) Persistence controls list size
+ANS: A,A
+EXPL: Large keys cause long-running commands; splitting reduces blocking and latency.
+TAGS: performance,modeling
+DIFF: 3
+
+##CONCEPT: Streams and messaging
+##PREREQ: Performance and latency
+##SUMMARY: Streams provide durable logs; Pub/Sub is ephemeral.
+
+Q: You need a durable queue with replay and consumer groups. What should you use?
+A) Pub/Sub
+B) Streams
+C) Lists with BLPOP only
+D) PING
+ANS: B
+EXPL: Streams persist entries and support consumer groups with replay.
+TAGS: streams,messaging
+DIFF: 2
+---
+Q: You need multiple consumers to share work and track offsets. Which command pattern fits?
+A) XREADGROUP with a consumer group
+B) SUBSCRIBE
+C) GET
+D) SET
+ANS: A
+EXPL: Consumer groups track offsets per consumer with XREADGROUP.
+TAGS: streams,consumers
+DIFF: 2
+---
+TYPE: TWO_STEP
+Q: Pending messages never complete and you need to recover them. What should you do?
+A) Use XCLAIM to take ownership of pending entries
+B) Delete the stream
+C) Use PUBLISH
+D) Use SETEX
+REASON: Why does that work?
+REASON_A) The PEL tracks unacknowledged entries that can be claimed
+REASON_B) PUBLISH stores messages for replay
+REASON_C) SETEX changes stream offsets
+REASON_D) Deleting the stream is required
+ANS: A,A
+EXPL: XCLAIM lets another consumer take over messages in the pending entries list.
+TAGS: streams,operations
+DIFF: 3
+
+##CONCEPT: Security and operations
+##PREREQ: Streams and messaging
+##SUMMARY: Secure defaults and diagnostics keep production Redis safe.
+
+Q: A Redis instance is accidentally exposed to the internet. What is the most direct fix?
+A) Bind Redis to a private interface and firewall access
+B) Disable AOF
+C) Increase maxmemory
+D) Enable pipelining
+ANS: A
+EXPL: Binding to a private interface and firewalling blocks public access.
+TAGS: security
+DIFF: 2
+---
+Q: You want to allow an app to run only GET and SET on specific keys. What should you use?
+A) ACL users with command and key patterns
+B) RDB snapshots
+C) Client tracking
+D) MONITOR
+ANS: A
+EXPL: ACLs define per-user command and key access patterns.
+TAGS: security,acl
+DIFF: 2
+---
+TYPE: TWO_STEP
+Q: Memory usage grows and you suspect fragmentation. Which command should you run?
+A) MEMORY DOCTOR
+B) SLOWLOG RESET
+C) LATENCY RESET
+D) CLIENT KILL
+REASON: Why is that helpful?
+REASON_A) MEMORY DOCTOR reports fragmentation and allocator hints
+REASON_B) SLOWLOG reports memory usage
+REASON_C) LATENCY RESET frees memory
+REASON_D) CLIENT KILL compacts memory
+ANS: A,A
+EXPL: MEMORY DOCTOR surfaces fragmentation and memory allocator issues for investigation.
 TAGS: ops,memory
-MISCONCEPT: “INFO has no memory stats”
 DIFF: 2
-VAR: info_memory
----
-TYPE: FILL
-Q: The command ______ helps visualize latency spikes and diagnostics.
-BLANK: LATENCY DOCTOR
-ANS: LATENCY DOCTOR
-EXPL: LATENCY DOCTOR summarizes latency sources.
-TAGS: ops,latency
-MISCONCEPT: “latency is only in slowlog”
-DIFF: 2
-VAR: latency_doctor_fill
----
-TYPE: ORDER
-Q: Order a debugging flow for sudden latency.
-ITEMS:
-1) Check INFO stats
-2) Run LATENCY DOCTOR
-3) Inspect slowlog
-4) Audit client output buffers
-ANS: 1,2,3,4
-EXPL: Start with high-level stats, then specific latency tools, then slowlog and client buffers.
-TAGS: ops,latency
-MISCONCEPT: “slowlog is always first”
-DIFF: 3
-VAR: latency_debug_order
----
-TYPE: TWO_STEP
-Q: Why is MONITOR risky in production?
-A) It is blocking and heavy
-B) It deletes keys
-C) It disables persistence
-D) It is required for replicas
-REASON: It streams every command, adding overhead and I/O load.
-REASON_A) It streams all commands
-REASON_B) It deletes keys
-REASON_C) It speeds up I/O
-REASON_D) It changes ACLs
-ANS: A,A
-EXPL: MONITOR adds overhead by streaming every command to the client.
-TAGS: ops
-MISCONCEPT: “MONITOR is safe”
-DIFF: 3
-VAR: monitor_risk
----
-Q: Which command shows client connection details?
-A) CLIENT LIST
-B) SHUTDOWN
-C) DBINFO
-D) MEMORY STATS
-ANS: A
-EXPL: CLIENT LIST provides per-client connection info.
-TAGS: ops
-MISCONCEPT: “CLIENT LIST is destructive”
-DIFF: 2
-VAR: client_list
----
-
-##CONCEPT: Cluster slotting & scaling
-##PREREQ: Replication & high availability
-##SUMMARY: Redis Cluster uses hash slots to distribute keys across nodes and scale horizontally.
-
-Q: Redis Cluster assigns keys to:
-A) Nodes by random choice
-B) 16,384 hash slots
-C) Per-client regions
-D) Per-database IDs
-ANS: B
-EXPL: Cluster uses 16,384 hash slots.
-TAGS: cluster
-MISCONCEPT: “slots are per keyspace”
-DIFF: 2
-VAR: cluster_slots
----
-Q: Hash tags in keys are used to:
-A) Encrypt keys
-B) Ensure co-location of related keys
-C) Increase memory
-D) Replace TTLs
-ANS: B
-EXPL: Hash tags within {} force keys to the same slot.
-TAGS: cluster
-MISCONCEPT: “hash tags are for TTLs”
-DIFF: 2
-VAR: hash_tags
----
-TYPE: FILL
-Q: Cross-slot errors happen when commands touch keys in different ______.
-BLANK: slots
-ANS: slots
-EXPL: Multi-key commands require keys in the same slot.
-TAGS: cluster
-MISCONCEPT: “cross-slot is a network issue”
-DIFF: 2
-VAR: cross_slot
----
-TYPE: ORDER
-Q: Order a resharding flow.
-ITEMS:
-1) Identify overloaded slot range
-2) Move slots to a new node
-3) Update client routing
-4) Rebalance traffic
-ANS: 1,2,3,4
-EXPL: Identify, move slots, update routing, then rebalance.
-TAGS: cluster
-MISCONCEPT: “clients auto-fix routing instantly”
-DIFF: 3
-VAR: reshard_order
----
-TYPE: TWO_STEP
-Q: Why can multi-key operations fail in Cluster?
-A) Keys are in different slots
-B) Keys are expired
-C) Replication is disabled
-D) Memory is low
-REASON: The command requires a single slot for atomicity.
-REASON_A) Different slots break atomic multi-key ops
-REASON_B) Expiration disables slots
-REASON_C) Replication disables slots
-REASON_D) Memory disables slots
-ANS: A,A
-EXPL: Multi-key operations require keys in the same hash slot.
-TAGS: cluster
-MISCONCEPT: “cluster supports all multi-key ops”
-DIFF: 3
-VAR: multikey_slots
----
-Q: Cluster failover is handled by:
-A) Sentinel only
-B) Cluster nodes voting and promoting replicas
-C) Manual operator intervention always
-D) RDB snapshot
-ANS: B
-EXPL: Cluster nodes vote to promote replicas to masters.
-TAGS: cluster
-MISCONCEPT: “Sentinel is always required for Cluster”
-DIFF: 3
-VAR: cluster_failover

@@ -4,6 +4,8 @@ import AppShell from './components/AppShell';
 import Signup from './pages/Signup';
 import Home from './pages/Home';
 import Topic from './pages/Topic';
+import Notes from './pages/Notes';
+import Anki from './pages/Anki';
 import Practice from './pages/Practice';
 import Account from './pages/Account';
 import Settings from './pages/Settings';
@@ -64,6 +66,22 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <Topic />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/topic/:topicId/notes"
+            element={
+              <ProtectedRoute>
+                <Notes />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/topic/:topicId/anki"
+            element={
+              <ProtectedRoute>
+                <Anki />
               </ProtectedRoute>
             }
           />

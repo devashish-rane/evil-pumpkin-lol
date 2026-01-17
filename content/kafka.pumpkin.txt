@@ -1,101 +1,206 @@
 #TOPIC: Kafka
 #DESC: Distributed event log for high-throughput streaming and durable messaging.
 
-##CONCEPT: Logs and partitions
+##CONCEPT: Event log fundamentals
 ##PREREQ:
-##SUMMARY: Topics are split into partitions that append events in order.
+##SUMMARY: Kafka stores events in ordered logs where retention and compaction shape history.
 
-Q: Ordering in Kafka is guaranteed:
-A) Across all partitions of a topic
-B) Only within a single partition
-C) Only for compacted topics
-D) Only for exactly-once producers
+Q: You need per-user ordering in a topic. What should you use as the partition key?
+A) Random UUID per message
+B) User ID
+C) Current timestamp
+D) Broker ID
 ANS: B
-EXPL: Kafka preserves order within a partition.
-TAGS: partitions
+EXPL: Using user ID as the key keeps that user’s events in one partition, preserving order.
+TAGS: partitions,ordering
 DIFF: 1
 ---
-Q: Partitioning helps Kafka scale by:
-A) Storing all data on one broker
-B) Spreading write load across brokers
-C) Eliminating replication
-D) Disabling consumer groups
+Q: You only care about the latest value per key (e.g., user profile). Which setting fits?
+A) Short retention only
+B) Log compaction
+C) Disable replication
+D) Increase fetch size
 ANS: B
-EXPL: Partitions spread load and increase parallelism.
-TAGS: partitions
+EXPL: Compaction keeps the latest value for each key while discarding older versions.
+TAGS: retention
+DIFF: 2
+---
+TYPE: TWO_STEP
+Q: You want to replay events from the beginning without affecting production consumers. What should you do?
+A) Reset all offsets in the existing consumer group
+B) Create a new consumer group and start from earliest
+C) Delete the topic and recreate it
+D) Increase partitions temporarily
+REASON: Why does that work?
+REASON_A) Offsets are tracked per consumer group
+REASON_B) Offsets are global for the topic
+REASON_C) New groups bypass retention settings
+REASON_D) Partitions contain offsets per broker
+ANS: B,A
+EXPL: Each consumer group has its own offsets, so a new group can replay safely.
+TAGS: consumers
 DIFF: 2
 ---
 
 ##CONCEPT: Consumer groups and offsets
-##PREREQ: Logs and partitions
-##SUMMARY: Consumers track offsets per partition to coordinate progress.
+##PREREQ: Event log fundamentals
+##SUMMARY: Offsets define progress and should be committed at the right time.
 
-Q: Offsets in Kafka represent:
-A) The number of brokers in a cluster
-B) A position within a partition log
-C) The timestamp of a message
-D) A consumer ID
+Q: To achieve at-least-once processing, when should you commit offsets?
+A) Before processing each message
+B) After processing each message
+C) Only on producer side
+D) Never commit offsets
 ANS: B
-EXPL: Offsets are sequential positions within a partition.
+EXPL: Committing after processing prevents data loss, even if it can lead to reprocessing.
+TAGS: consumers,delivery
+DIFF: 2
+---
+Q: When a consumer group rebalances, what happens?
+A) Messages are deleted
+B) Partitions are reassigned among consumers
+C) Brokers restart automatically
+D) Compaction stops
+ANS: B
+EXPL: Rebalancing redistributes partitions so each consumer gets a fair share.
 TAGS: consumers
 DIFF: 1
 ---
-Q: When a consumer group rebalances, Kafka:
-A) Deletes old offsets
-B) Redistributes partitions among consumers
-C) Compresses logs
-D) Restarts the broker
-ANS: B
-EXPL: Rebalance reassigns partitions to active consumers in the group.
-TAGS: consumers
+TYPE: TWO_STEP
+Q: You have 6 consumers but only 3 partitions. Throughput is still low. What change helps?
+A) Add more consumers
+B) Increase partitions
+C) Reduce retention
+D) Disable auto-commit
+REASON: Why does that help?
+REASON_A) Only one consumer can read each partition at a time
+REASON_B) Consumers always share partitions concurrently
+REASON_C) Retention controls consumer speed
+REASON_D) Auto-commit causes lag
+ANS: B,A
+EXPL: Parallelism is capped by partition count; more partitions allow more consumers to work.
+TAGS: consumers,scaling
 DIFF: 2
 ---
 
-##CONCEPT: Producer acks and durability
-##PREREQ:
-##SUMMARY: Producer acknowledgments control durability vs latency tradeoffs.
+##CONCEPT: Producer guarantees
+##PREREQ: Consumer groups and offsets
+##SUMMARY: Producer settings balance durability, ordering, and duplication risk.
 
-Q: The strongest durability setting is achieved with:
+Q: You want strong durability on writes. Which setting is key?
 A) acks=0
 B) acks=1
 C) acks=all
 D) acks=leader
 ANS: C
-EXPL: acks=all waits for all in-sync replicas to acknowledge.
-TAGS: producers
+EXPL: acks=all waits for all in-sync replicas to confirm the write.
+TAGS: producers,durability
 DIFF: 2
 ---
-Q: Idempotent producers help prevent:
-A) Slow consumers
-B) Duplicate writes on retry
+Q: To prevent duplicates on retry, what should you enable?
+A) Compression
+B) Idempotent producer
 C) Log compaction
-D) Partition reassignments
+D) Batch size 0
 ANS: B
-EXPL: Idempotence ensures retries do not create duplicates.
-TAGS: producers
+EXPL: Idempotence ensures retries do not create duplicate records.
+TAGS: producers,delivery
 DIFF: 2
 ---
+TYPE: TWO_STEP
+Q: You publish payment events and need ordering plus durability. Which config fits?
+A) acks=1 and retries=0
+B) acks=all with idempotence enabled
+C) acks=0 and async sends
+D) log compaction only
+REASON: Why does that configuration help?
+REASON_A) It prevents duplicates and waits for ISR acknowledgments
+REASON_B) It reduces latency by skipping replication
+REASON_C) It guarantees ordering without acknowledgments
+REASON_D) It keeps only the latest value
+ANS: B,A
+EXPL: Idempotence prevents duplicates, and acks=all guarantees durable replication.
+TAGS: producers,ordering
+DIFF: 3
+---
 
-##CONCEPT: Streams and processing
-##PREREQ: Consumer groups and offsets
-##SUMMARY: Kafka Streams builds stateful processing on top of topics.
+##CONCEPT: Transactions and exactly-once
+##PREREQ: Producer guarantees
+##SUMMARY: Transactions allow atomic writes and offset commits for EOS processing.
 
-Q: A Kafka Streams state store is used to:
-A) Store broker metadata
-B) Hold local state for processing
-C) Replace Zookeeper
-D) Encrypt messages
+Q: You need to read, process, and write results without duplicates. What feature do you use?
+A) Consumer auto-commit
+B) Producer transactions
+C) Smaller partitions
+D) Log compaction only
 ANS: B
-EXPL: State stores keep local data for aggregations and joins.
-TAGS: streams
+EXPL: Transactions let you atomically write output and commit input offsets.
+TAGS: transactions,eos
 DIFF: 2
 ---
-Q: Exactly-once processing in Kafka Streams relies on:
-A) Fire-and-forget writes
-B) Transactional producers
-C) Disabling replication
-D) External locking
+Q: For EOS in Kafka Streams, which capability is essential?
+A) Disable retries
+B) Transactional producer with idempotence
+C) Increase fetch size
+D) Disable replication
 ANS: B
-EXPL: EOS uses transactions to atomically write results and offsets.
-TAGS: streams
+EXPL: EOS relies on transactional producers to atomically write and commit offsets.
+TAGS: streams,eos
+DIFF: 2
+---
+TYPE: TWO_STEP
+Q: You must write to an output topic and commit offsets atomically. What should you do?
+A) Commit offsets first
+B) Use a transaction and sendOffsetsToTransaction
+C) Write output then commit later
+D) Disable offset commits
+REASON: Why does that work?
+REASON_A) Offsets are part of the same transaction as output writes
+REASON_B) Offsets are always committed last by the broker
+REASON_C) Offset commits are independent of producer state
+REASON_D) Offsets are stored in the output topic
+ANS: B,A
+EXPL: sendOffsetsToTransaction ties offset commits to the transaction so both succeed or fail together.
+TAGS: transactions
+DIFF: 3
+---
+
+##CONCEPT: Operations and reliability
+##PREREQ: Transactions and exactly-once
+##SUMMARY: Monitoring lag, ISR health, and broker balance keeps the cluster stable.
+
+Q: Which metric should alert you to replication risk?
+A) UnderReplicatedPartitions
+B) BytesOutPerSec
+C) RequestHandlerAvgIdlePercent
+D) FetchResponseSize
+ANS: A
+EXPL: Under-replicated partitions indicate replicas are not fully in sync.
+TAGS: ops,replication
+DIFF: 2
+---
+Q: After a rolling restart, one broker has most partition leaders. What is the fix?
+A) Increase retention
+B) Preferred replica leader election
+C) Increase fetch.min.bytes
+D) Disable auto leader rebalance
+ANS: B
+EXPL: Preferred leader election redistributes leaders to balance load.
+TAGS: ops,scaling
+DIFF: 3
+---
+TYPE: TWO_STEP
+Q: Producer timeouts spike during peak traffic. What should you do first?
+A) Add brokers or partitions
+B) Reduce replication factor to 1
+C) Disable acks
+D) Turn off compression
+REASON: Why is that the best first step?
+REASON_A) More capacity reduces request queueing and timeouts
+REASON_B) Lower replication always fixes timeouts permanently
+REASON_C) Timeouts are caused by compression only
+REASON_D) acks=all never times out
+ANS: A,A
+EXPL: Scaling capacity reduces request backlog; keep durability intact while you add resources.
+TAGS: ops,capacity
 DIFF: 3

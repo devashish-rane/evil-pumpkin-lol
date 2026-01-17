@@ -1,0 +1,202 @@
+#TOPIC: HTTP and APIs
+#DESC: Practical HTTP semantics, caching, and API reliability patterns.
+
+##CONCEPT: Methods and idempotency
+##PREREQ:
+##SUMMARY: Methods describe intent and determine whether requests are safe to retry.
+
+Q: You need to replace an entire resource representation. Which HTTP method fits best?
+A) PUT
+B) POST
+C) PATCH
+D) GET
+ANS: A
+EXPL: PUT replaces the full resource and is idempotent when the client supplies the full state.
+TAGS: http,methods
+DIFF: 1
+---
+Q: You need to create a new child resource under /users/123/orders. Which method is most appropriate?
+A) POST
+B) GET
+C) DELETE
+D) OPTIONS
+ANS: A
+EXPL: POST creates a new resource under a collection endpoint.
+TAGS: http,methods
+DIFF: 1
+---
+TYPE: TWO_STEP
+Q: You are adding automatic retries. Which request is safest to retry by default?
+A) POST /payments
+B) PUT /users/123
+C) PATCH /users/123
+D) POST /login
+REASON: Why is that safer?
+REASON_A) PUT is idempotent when the same state is sent repeatedly
+REASON_B) POST is always safe to retry
+REASON_C) PATCH is always idempotent
+REASON_D) Login never creates side effects
+ANS: B,A
+EXPL: PUT is idempotent, so repeating it produces the same result when the payload is the full desired state.
+TAGS: http,methods
+DIFF: 2
+
+##CONCEPT: Status codes and error contracts
+##PREREQ: Methods and idempotency
+##SUMMARY: Status codes communicate outcomes; error payloads should be predictable.
+
+Q: A client sends invalid JSON. Which status code should you return?
+A) 200
+B) 400
+C) 401
+D) 500
+ANS: B
+EXPL: 400 indicates a bad request caused by client input.
+TAGS: http,errors
+DIFF: 1
+---
+Q: The requested resource does not exist. Which status code is correct?
+A) 404
+B) 403
+C) 409
+D) 503
+ANS: A
+EXPL: 404 is used when the resource is not found.
+TAGS: http,errors
+DIFF: 1
+---
+TYPE: TWO_STEP
+Q: A dependency is down and the service cannot handle the request. Which status code should you return?
+A) 500
+B) 502
+C) 503
+D) 504
+REASON: Why is that the right choice?
+REASON_A) 503 indicates temporary unavailability and can include Retry-After
+REASON_B) 500 means the client is wrong
+REASON_C) 502 is always used for outages
+REASON_D) 504 only applies to client timeouts
+ANS: C,A
+EXPL: 503 signals a temporary service outage and supports backoff guidance.
+TAGS: http,errors
+DIFF: 2
+
+##CONCEPT: Caching and conditional requests
+##PREREQ: Status codes and error contracts
+##SUMMARY: Cache headers and validators reduce load without serving stale data.
+
+Q: You want a response cached for five minutes. Which header should you use?
+A) Cache-Control: max-age=300
+B) Pragma: no-cache
+C) Expires: 0
+D) Vary: *
+ANS: A
+EXPL: max-age controls how long the response can be cached.
+TAGS: http,caching
+DIFF: 1
+---
+Q: You want to avoid re-downloading unchanged resources. Which header pair enables conditional GET?
+A) ETag and If-None-Match
+B) Authorization and Cookie
+C) Accept and Content-Type
+D) Range and Content-Range
+ANS: A
+EXPL: ETag validators let clients ask for changes and receive 304 Not Modified.
+TAGS: http,caching
+DIFF: 2
+---
+TYPE: TWO_STEP
+Q: You serve static assets with long cache lifetimes and need safe updates. What should you do?
+A) Use versioned URLs (e.g., app.v2.js)
+B) Set Cache-Control: no-store
+C) Disable ETag
+D) Remove all cache headers
+REASON: Why does that work?
+REASON_A) Changing the URL creates a new cache key and avoids stale assets
+REASON_B) no-store improves performance
+REASON_C) Removing validators prevents caching
+REASON_D) Long caches ignore URLs
+ANS: A,A
+EXPL: Versioned URLs let you keep long cache lifetimes while still rolling out changes safely.
+TAGS: http,caching
+DIFF: 2
+
+##CONCEPT: Authentication and authorization
+##PREREQ: Caching and conditional requests
+##SUMMARY: Tokens identify users; scopes and roles authorize actions.
+
+Q: Where should a bearer token be sent in an HTTP request?
+A) Authorization header
+B) Query string only
+C) User-Agent header
+D) Content-Length
+ANS: A
+EXPL: Authorization: Bearer <token> is the standard for bearer tokens.
+TAGS: http,security
+DIFF: 1
+---
+Q: You need to restrict an endpoint to read-only access. What should you enforce?
+A) OAuth scopes or role checks
+B) Larger payload size
+C) Fewer response fields
+D) A different HTTP method only
+ANS: A
+EXPL: Authorization should validate scopes or roles on the server.
+TAGS: http,security
+DIFF: 2
+---
+TYPE: TWO_STEP
+Q: You are using bearer tokens for auth. Why must you enforce HTTPS?
+A) It improves caching
+B) Tokens are credentials and can be stolen in transit
+C) HTTP disables headers
+D) HTTPS increases payload size
+REASON: Why is that critical?
+REASON_A) Bearer tokens grant access to whoever holds them
+REASON_B) Tokens are encrypted inside HTTP
+REASON_C) TLS is only for browsers
+REASON_D) HTTPS prevents all bugs
+ANS: B,A
+EXPL: Bearer tokens are credentials; without TLS they can be intercepted and reused.
+TAGS: http,security
+DIFF: 2
+
+##CONCEPT: Reliability, pagination, and rate limits
+##PREREQ: Authentication and authorization
+##SUMMARY: Stable APIs avoid duplicates, page large data, and guide clients through limits.
+
+Q: You need to return large result sets without timeouts. What should you add?
+A) Cursor-based pagination
+B) One giant response
+C) A longer timeout only
+D) Extra database indexes only
+ANS: A
+EXPL: Pagination limits response size and keeps latency predictable.
+TAGS: http,apis
+DIFF: 2
+---
+Q: Clients retry a POST that creates orders, causing duplicates. What should you add?
+A) Idempotency keys
+B) More retries
+C) A larger payload
+D) A cache header
+ANS: A
+EXPL: Idempotency keys let the server de-duplicate repeated requests safely.
+TAGS: http,reliability
+DIFF: 2
+---
+TYPE: TWO_STEP
+Q: A client is sending too many requests. What status code should you return?
+A) 401
+B) 404
+C) 429
+D) 500
+REASON: Why is that the right response?
+REASON_A) 429 signals rate limiting and encourages backoff
+REASON_B) 401 means invalid input
+REASON_C) 404 signals rate limiting
+REASON_D) 500 is for successful throttling
+ANS: C,A
+EXPL: 429 Too Many Requests communicates rate limits and supports retry guidance.
+TAGS: http,reliability
+DIFF: 2
